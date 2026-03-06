@@ -1,0 +1,71 @@
+{
+  "clusters": {
+    "mathematics": {
+      "label": "Mathematics",
+      "keywords": ["math", "mathematics", "calculus", "algebra", "geometry", "statistics", "trigonometry", "arithmetic", "number theory", "linear algebra"],
+      "resources": [
+        {"name": "Khan Academy – Math", "url": "https://www.khanacademy.org/math", "description": "Free comprehensive math courses from basics to calculus"},
+        {"name": "Paul's Online Math Notes", "url": "https://tutorial.math.lamar.edu", "description": "Excellent notes for Algebra, Calculus, Differential Equations"},
+        {"name": "Wolfram Alpha", "url": "https://www.wolframalpha.com", "description": "Computational engine for solving equations and exploring math"},
+        {"name": "Desmos Graphing Calculator", "url": "https://www.desmos.com", "description": "Interactive graphing tool for visualizing math functions"},
+        {"name": "MIT OpenCourseWare – Math", "url": "https://ocw.mit.edu/courses/mathematics/", "description": "Free MIT university-level mathematics courses"},
+        {"name": "3Blue1Brown (YouTube)", "url": "https://www.youtube.com/@3blue1brown", "description": "Visual and intuitive explanations of advanced mathematics"}
+      ]
+    },
+    "science": {
+      "label": "Science (Physics, Chemistry, Biology)",
+      "keywords": ["physics", "chemistry", "biology", "science", "mechanics", "optics", "thermodynamics", "quantum", "organic", "genetics", "evolution", "ecology"],
+      "resources": [
+        {"name": "Khan Academy – Science", "url": "https://www.khanacademy.org/science", "description": "Physics, biology, and chemistry courses for all levels"},
+        {"name": "PhET Interactive Simulations", "url": "https://phet.colorado.edu", "description": "Free interactive science simulations from University of Colorado"},
+        {"name": "HyperPhysics", "url": "http://hyperphysics.phy-astr.gsu.edu", "description": "Comprehensive physics reference and concept explorer"},
+        {"name": "ChemLibreTexts", "url": "https://chem.libretexts.org", "description": "Open-access chemistry textbooks and resources"},
+        {"name": "NCBI – Biology Resources", "url": "https://www.ncbi.nlm.nih.gov", "description": "National Center for Biotechnology Information"},
+        {"name": "Crash Course Science (YouTube)", "url": "https://www.youtube.com/@crashcourse", "description": "Engaging science videos covering biology, chemistry, and physics"}
+      ]
+    },
+    "computer_science": {
+      "label": "Computer Science & Programming",
+      "keywords": ["computer", "programming", "coding", "algorithm", "data structure", "software", "python", "java", "javascript", "database", "network", "machine learning", "AI"],
+      "resources": [
+        {"name": "CS50 – Harvard", "url": "https://cs50.harvard.edu", "description": "Harvard's introduction to computer science – highly recommended"},
+        {"name": "freeCodeCamp", "url": "https://www.freecodecamp.org", "description": "Free coding bootcamp with projects and certifications"},
+        {"name": "GeeksforGeeks", "url": "https://www.geeksforgeeks.org", "description": "DSA, algorithms, and coding interview preparation"},
+        {"name": "LeetCode", "url": "https://leetcode.com", "description": "Coding problems for technical interview preparation"},
+        {"name": "Python Documentation", "url": "https://docs.python.org/3", "description": "Official Python 3 documentation and tutorials"},
+        {"name": "Coursera – CS Courses", "url": "https://www.coursera.org/browse/computer-science", "description": "University-level CS courses from top institutions"}
+      ]
+    },
+    "humanities": {
+      "label": "History, Geography & Social Studies",
+      "keywords": ["history", "geography", "politics", "economics", "sociology", "philosophy", "culture", "civilization", "war", "revolution", "democracy", "society"],
+      "resources": [
+        {"name": "History.com", "url": "https://www.history.com", "description": "Articles, videos, and resources on world history"},
+        {"name": "Britannica", "url": "https://www.britannica.com", "description": "Encyclopedia Britannica – reliable academic reference"},
+        {"name": "Crash Course History (YouTube)", "url": "https://www.youtube.com/@crashcourse", "description": "John Green's engaging world and US history series"},
+        {"name": "Khan Academy – Humanities", "url": "https://www.khanacademy.org/humanities", "description": "Art history, world history, and more"},
+        {"name": "JSTOR", "url": "https://www.jstor.org", "description": "Academic journals, books, and primary sources"},
+        {"name": "National Geographic", "url": "https://www.nationalgeographic.com", "description": "Geography, culture, and environmental studies"}
+      ]
+    },
+    "language": {
+      "label": "English, Literature & Languages",
+      "keywords": ["english", "literature", "writing", "grammar", "essay", "language", "poetry", "novel", "reading", "composition", "vocabulary", "linguistics"],
+      "resources": [
+        {"name": "SparkNotes", "url": "https://www.sparknotes.com", "description": "Literature guides and study materials for classic texts"},
+        {"name": "LitCharts", "url": "https://www.litcharts.com", "description": "Literature guides with detailed analysis and themes"},
+        {"name": "Grammarly Blog", "url": "https://www.grammarly.com/blog", "description": "Writing tips, grammar rules, and style guides"},
+        {"name": "Project Gutenberg", "url": "https://www.gutenberg.org", "description": "Free classic literature texts in digital format"},
+        {"name": "Purdue OWL", "url": "https://owl.purdue.edu", "description": "Academic writing resources and citation guides"},
+        {"name": "Vocabulary.com", "url": "https://www.vocabulary.com", "description": "Interactive vocabulary learning with spaced repetition"}
+      ]
+    }
+  },
+  "general_resources": [
+    {"name": "Wikipedia", "url": "https://www.wikipedia.org", "description": "Free encyclopedia covering virtually every academic topic"},
+    {"name": "YouTube EDU", "url": "https://www.youtube.com/education", "description": "Educational videos across all subjects"},
+    {"name": "Quizlet", "url": "https://quizlet.com", "description": "Flashcard and study game platform for any subject"},
+    {"name": "Anki", "url": "https://apps.ankiweb.net", "description": "Spaced repetition flashcard system for efficient memorization"},
+    {"name": "Notion", "url": "https://www.notion.so", "description": "Note-taking and study organization workspace"}
+  ]
+}

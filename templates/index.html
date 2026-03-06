@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Study Pal — Capstone Project</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+<!-- ═══════════  SIDEBAR  ════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="brand">
+    <div class="brand-orb">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="1.2"/>
+        <path d="M12 20h16M20 12v16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="20" cy="20" r="5" fill="currentColor" opacity=".2"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-name">AI Study Pal</div>
+      <div class="brand-tag">LaunchED Capstone · 2026</div>
+    </div>
+  </div>
+
+  <div class="nav-section-lbl">Features</div>
+  <nav class="nav">
+    <button class="nav-btn active" data-page="planner">
+      <span class="ni">📅</span><span class="nt">Study Planner</span><span class="nc">Pandas</span>
+    </button>
+    <button class="nav-btn" data-page="quiz">
+      <span class="ni">❓</span><span class="nt">Quiz Generator</span><span class="nc">LR</span>
+    </button>
+    <button class="nav-btn" data-page="summarizer">
+      <span class="ni">📝</span><span class="nt">Summarizer</span><span class="nc">Keras</span>
+    </button>
+    <button class="nav-btn" data-page="tips">
+      <span class="ni">💡</span><span class="nt">Study Tips</span><span class="nc">NLTK</span>
+    </button>
+    <button class="nav-btn" data-page="feedback">
+      <span class="ni">🌟</span><span class="nt">Feedback</span><span class="nc">DL</span>
+    </button>
+    <button class="nav-btn" data-page="resources">
+      <span class="ni">🔗</span><span class="nt">Resources</span><span class="nc">K-means</span>
+    </button>
+  </nav>
+
+  <div class="nav-section-lbl" style="margin-top:auto;padding-top:24px">Tech Stack</div>
+  <div class="tech-pills">
+    <span>Python</span><span>Flask</span><span>Pandas</span>
+    <span>scikit-learn</span><span>Keras</span><span>NLTK</span><span>Matplotlib</span>
+  </div>
+
+  <div class="sb-status">
+    <span class="dot-green"></span>Models Online
+  </div>
+</aside>
+
+<button class="ham" id="ham"><span></span><span></span><span></span></button>
+
+<!-- ═══════════  MAIN  ═══════════════════════════════════════ -->
+<main class="main" id="main">
+
+  <!-- ■ STUDY PLANNER ───────────────────────────────────────── -->
+  <section class="page active" id="page-planner">
+    <div class="phdr">
+      <div>
+        <h1>Study <em>Planner</em></h1>
+        <p>Pandas date-range scheduler · Rule-based AI · CSV export</p>
+      </div>
+      <div class="mbadge">📊 Pandas + Logistic Regression</div>
+    </div>
+
+    <div class="tcols">
+      <div class="card">
+        <h2 class="ct">Your Details</h2>
+        <div class="fld">
+          <label>Subject / Course</label>
+          <input type="text" id="planSubject" placeholder="e.g. Biology, Mathematics, Python…"/>
+        </div>
+        <div class="fld">
+          <label>Daily study hours &mdash; <span id="hoursLbl" class="gold">3 hrs</span></label>
+          <input type="range" id="planHours" min="1" max="10" value="3" step="0.5"/>
+        </div>
+        <div class="fld">
+          <label>Exam / Deadline date</label>
+          <input type="date" id="planDate"/>
+        </div>
+        <button class="btn gold-btn" id="btnPlan">Generate Study Plan &rarr;</button>
+        <div class="chart-frame" id="planChartWrap" style="display:none">
+          <div class="chart-lbl">📈 Weekly Hours — Matplotlib Chart</div>
+          <img id="planChart" class="cimg" alt="Weekly hours chart"/>
+        </div>
+      </div>
+
+      <div class="card out-card" id="planOutput" style="display:none">
+        <div class="out-hdr">
+          <h2 class="ct">Your Schedule</h2>
+          <a href="/download_csv" class="btn sm-btn outline-btn" download>⬇ CSV</a>
+        </div>
+        <pre class="mono-out" id="planResult"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ■ QUIZ GENERATOR ──────────────────────────────────────── -->
+  <section class="page" id="page-quiz">
+    <div class="phdr">
+      <div>
+        <h1>Quiz <em>Generator</em></h1>
+        <p>TF-IDF vectorisation · Logistic Regression difficulty classifier · 5 MCQs</p>
+      </div>
+      <div class="mbadge">🤖 TF-IDF + Logistic Regression</div>
+    </div>
+
+    <div class="tcols">
+      <div class="card">
+        <h2 class="ct">Quiz Settings</h2>
+        <div class="fld">
+          <label>Topic</label>
+          <input type="text" id="quizTopic" placeholder="e.g. Photosynthesis, Newton's Laws, Python OOP…"/>
+        </div>
+        <div class="fld">
+          <label>Difficulty</label>
+          <div class="pills" id="quizDiff">
+            <button class="pl" data-val="easy">🟢 Easy</button>
+            <button class="pl active" data-val="medium">🟡 Medium</button>
+            <button class="pl" data-val="hard">🔴 Hard</button>
+          </div>
+        </div>
+        <button class="btn gold-btn" id="btnQuiz">Generate Quiz &rarr;</button>
+        <div class="chart-frame" id="qChartWrap" style="display:none">
+          <div class="chart-lbl">📊 Difficulty Distribution — Matplotlib</div>
+          <img id="qChart" class="cimg" alt="Difficulty chart"/>
+        </div>
+      </div>
+
+      <div class="card out-card" id="quizOutput" style="display:none">
+        <div class="out-hdr">
+          <h2 class="ct" id="quizSbjTitle">Quiz</h2>
+          <button class="btn sm-btn outline-btn" id="revealAll">Reveal All</button>
+        </div>
+        <div id="quizResult"></div>
+        <p class="mnote" id="quizMNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ■ TEXT SUMMARIZER ─────────────────────────────────────── -->
+  <section class="page" id="page-summarizer">
+    <div class="phdr">
+      <div>
+        <h1>Text <em>Summarizer</em></h1>
+        <p>Keras Dense NN sentence scorer · NLTK keyword extractor</p>
+      </div>
+      <div class="mbadge">🧠 Keras Dense NN + NLTK</div>
+    </div>
+
+    <div class="ocols">
+      <div class="card">
+        <h2 class="ct">Your Notes / Text</h2>
+        <div class="fld">
+          <label>Paste text (min 50 characters)</label>
+          <textarea id="summText" rows="10" placeholder="Paste your lecture notes, textbook excerpt, or any study material…"></textarea>
+          <div class="ccount" id="charCount">0 characters</div>
+        </div>
+        <button class="btn gold-btn" id="btnSumm">Summarize &rarr;</button>
+      </div>
+
+      <div class="card out-card" id="summOutput" style="display:none">
+        <h2 class="ct">Results</h2>
+        <div class="sblock">
+          <div class="slbl">📋 Summary (Keras NN)</div>
+          <p id="summResult" class="stext"></p>
+        </div>
+        <div class="sblock">
+          <div class="slbl">🔑 Keywords (NLTK)</div>
+          <div id="kwResult" class="kw-chips"></div>
+        </div>
+        <div class="sblock">
+          <div class="slbl">• Bullet Points</div>
+          <ul id="bpResult" class="bp-list"></ul>
+        </div>
+        <p class="mnote" id="summMNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ■ STUDY TIPS ──────────────────────────────────────────── -->
+  <section class="page" id="page-tips">
+    <div class="phdr">
+      <div>
+        <h1>Study <em>Tips</em></h1>
+        <p>NLTK tokenisation &amp; stop-word removal · keyword-to-tip mapping</p>
+      </div>
+      <div class="mbadge">📖 NLTK Keyword Extraction</div>
+    </div>
+
+    <div class="tcols">
+      <div class="card">
+        <h2 class="ct">Your Subject</h2>
+        <div class="fld">
+          <label>Subject</label>
+          <input type="text" id="tipsSubject" placeholder="e.g. Biology, Chemistry, History…"/>
+        </div>
+        <div class="fld">
+          <label>Optional context (paste a paragraph)</label>
+          <textarea id="tipsText" rows="4" placeholder="Describe what you find difficult…"></textarea>
+        </div>
+        <button class="btn gold-btn" id="btnTips">Get Study Tips &rarr;</button>
+      </div>
+
+      <div class="card out-card" id="tipsOutput" style="display:none">
+        <h2 class="ct">Personalised Tips</h2>
+        <div id="tipsKw" class="kw-chips" style="margin-bottom:14px"></div>
+        <ol id="tipsList" class="tips-ol"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ■ FEEDBACK ─────────────────────────────────────────────── -->
+  <section class="page" id="page-feedback">
+    <div class="phdr">
+      <div>
+        <h1>Motivational <em>Feedback</em></h1>
+        <p>Keras Embedding + Dense NN classifies score bucket → personalised encouragement</p>
+      </div>
+      <div class="mbadge">💬 Keras Embedding NN</div>
+    </div>
+
+    <div class="tcols">
+      <div class="card">
+        <h2 class="ct">Your Details</h2>
+        <div class="fld">
+          <label>Your Name</label>
+          <input type="text" id="fbName" placeholder="Enter your name…"/>
+        </div>
+        <div class="fld">
+          <label>Subject</label>
+          <input type="text" id="fbSubject" placeholder="e.g. Biology, Physics…"/>
+        </div>
+        <div class="fld">
+          <label>Quiz Score &mdash; <span id="scoreLbl" class="gold">50%</span></label>
+          <input type="range" id="fbScore" min="0" max="100" value="50"/>
+        </div>
+        <button class="btn gold-btn" id="btnFb">Get Feedback &rarr;</button>
+      </div>
+
+      <div class="card out-card" id="fbOutput" style="display:none">
+        <h2 class="ct">Your Feedback</h2>
+        <div class="score-ring" id="scoreRing">
+          <div id="scoreNum" class="score-num">50</div>
+          <div class="score-pct">%</div>
+        </div>
+        <div class="fb-msg" id="fbMsg"></div>
+        <div class="fb-next">
+          <strong>Next Step →</strong>
+          <span id="fbNext"></span>
+        </div>
+        <p class="mnote" id="fbMNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ■ RESOURCES ────────────────────────────────────────────── -->
+  <section class="page" id="page-resources">
+    <div class="phdr">
+      <div>
+        <h1>Resource <em>Suggestions</em></h1>
+        <p>TF-IDF vectorisation · K-means topic clustering · curated resource library</p>
+      </div>
+      <div class="mbadge">🔍 K-means Clustering</div>
+    </div>
+
+    <!-- EDA chart strip -->
+    <div class="eda-strip">
+      <div class="eda-hdr">
+        <span>📊 Dataset EDA — Question Distribution by Subject</span>
+        <button class="btn sm-btn outline-btn" id="btnEda">Load Chart (Matplotlib)</button>
+      </div>
+      <img id="edaImg" class="cimg eda-img" alt="Subject distribution chart" style="display:none"/>
+    </div>
+
+    <div class="tcols" style="margin-top:20px">
+      <div class="card">
+        <h2 class="ct">Find Resources</h2>
+        <div class="fld">
+          <label>Subject</label>
+          <input type="text" id="resSubject" placeholder="e.g. Chemistry, Python, History…"/>
+        </div>
+        <button class="btn gold-btn" id="btnRes">Find Resources &rarr;</button>
+        <p class="mnote" id="resMNote" style="margin-top:12px"></p>
+      </div>
+
+      <div class="card out-card" id="resOutput" style="display:none">
+        <h2 class="ct" id="resSbjTitle">Resources</h2>
+        <div id="resGrid" class="res-grid"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Loading overlay -->
+<div class="overlay" id="overlay">
+  <div class="lbox">
+    <div class="lring"></div>
+    <div class="ltxt" id="ltxt">Processing…</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
