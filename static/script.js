@@ -1,18 +1,11 @@
 /* ================================================================
    AI Study Pal — script.js
-   Updated with:
-     1. Study Plan  → Chapters & Topics input
-     2. Quiz        → Chapter/Topic, No. of Questions, Per-question Timer
-     3. Feedback    → Marks-based score + Chapter improvement strategies
-     4. Summarizer  → Camera / image upload + OCR summarisation
 ================================================================ */
-
 'use strict';
-
-// ── Utility helpers ──────────────────────────────────────────────
 
 const $ = id => document.getElementById(id);
 
+// ── Toast ────────────────────────────────────────────────────────
 function showToast(msg, type = 'info') {
   const t = $('toast');
   t.textContent = msg;
@@ -20,32 +13,53 @@ function showToast(msg, type = 'info') {
   setTimeout(() => t.classList.remove('on'), 3500);
 }
 
+// ── Loader ───────────────────────────────────────────────────────
 function showLoader(msg = 'Processing…') {
   $('ltxt').textContent = msg;
   $('overlay').classList.add('on');
 }
+function hideLoader() { $('overlay').classList.remove('on'); }
 
-function hideLoader() {
-  $('overlay').classList.remove('on');
-}
-
+// ── Safe JSON fetch ──────────────────────────────────────────────
+// Root cause of "Unexpected end of JSON input":
+// Flask returns an HTML 500 page when a route crashes.
+// This function guards against that and shows the real error.
 async function postJSON(url, body) {
-  const res  = await fetch(url, {
-    method : 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body   : JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify(body),
+    });
+  } catch (netErr) {
+    throw new Error('Network error — is the server running?');
+  }
+
   const text = await res.text();
-  if (!text || text.trim() === '') throw new Error('Empty response from server');
+
+  // Empty body
+  if (!text || text.trim() === '') {
+    throw new Error(`Server returned empty response (HTTP ${res.status})`);
+  }
+
+  // HTML error page (Flask 500 / Gunicorn crash)
+  if (text.trim().startsWith('<!')) {
+    throw new Error(`Server error (HTTP ${res.status}) — check Render logs`);
+  }
+
   let data;
-  try { data = JSON.parse(text); }
-  catch { throw new Error('Unexpected end of JSON input — check server logs'); }
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error('Invalid JSON from server — check Render logs');
+  }
+
   if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
   return data;
 }
 
 // ── Navigation ───────────────────────────────────────────────────
-
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -55,32 +69,31 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     $('sidebar').classList.remove('open');
   });
 });
-
 $('ham').addEventListener('click', () => $('sidebar').classList.toggle('open'));
 
 // ── Pill group helper ────────────────────────────────────────────
-
-function initPillGroup(groupId, onChange) {
-  const group = $(groupId);
-  if (!group) return;
-  group.querySelectorAll('.pl').forEach(pl => {
+function initPillGroup(groupId) {
+  const g = $(groupId);
+  if (!g) return;
+  g.querySelectorAll('.pl').forEach(pl => {
     pl.addEventListener('click', () => {
-      group.querySelectorAll('.pl').forEach(p => p.classList.remove('active'));
+      g.querySelectorAll('.pl').forEach(p => p.classList.remove('active'));
       pl.classList.add('active');
-      if (onChange) onChange(pl.dataset.val);
     });
   });
 }
-
 function getActivePill(groupId) {
-  const active = document.querySelector(`#${groupId} .pl.active`);
-  return active ? active.dataset.val : null;
+  const a = document.querySelector(`#${groupId} .pl.active`);
+  return a ? a.dataset.val : null;
 }
 
-// ════════════════════════════════════════════════════════════════
-//  1. STUDY PLANNER
-// ════════════════════════════════════════════════════════════════
+initPillGroup('quizNumQ');
+initPillGroup('quizTimer');
+initPillGroup('quizDiff');
 
+// ════════════════════════════════════════════════════════════════
+//  STUDY PLANNER
+// ════════════════════════════════════════════════════════════════
 $('planHours').addEventListener('input', function () {
   $('hoursLbl').textContent = `${this.value} hrs`;
 });
@@ -98,14 +111,12 @@ $('btnPlan').addEventListener('click', async () => {
   try {
     const d = await postJSON('/study_plan', {
       subject,
-      chapters,          // ← NEW: chapter list
+      chapters,
       hours_per_day: hours,
-      exam_date: date,
+      exam_date    : date,
     });
-
-    $('planResult').textContent = d.plan_text;
+    $('planResult').textContent   = d.plan_text;
     $('planOutput').style.display = 'block';
-
     if (d.chart_b64) {
       $('planChart').src = `data:image/png;base64,${d.chart_b64}`;
       $('planChartWrap').style.display = 'block';
@@ -119,22 +130,28 @@ $('btnPlan').addEventListener('click', async () => {
 });
 
 // ════════════════════════════════════════════════════════════════
-//  2. QUIZ GENERATOR  (chapter, num questions, timer)
+//  QUIZ GENERATOR
 // ════════════════════════════════════════════════════════════════
 
-initPillGroup('quizDiff');
-initPillGroup('quizNumQ');
-initPillGroup('quizTimer');
+// Subject selector
+const VALID_SUBJECTS = ['Biology','Mathematics','History','Python','Physics','Chemistry'];
+let _selectedSubject = null;
 
-// ── Per-question timer state ──────────────────────────────────
+document.querySelectorAll('.subj-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.subj-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _selectedSubject = btn.dataset.val;
+    $('subjHint').style.display = 'none';
+  });
+});
+
+// Timer state
 let _timerInterval = null;
-let _timerSecs     = 0;
 let _timerTotal    = 0;
-let _currentQIdx   = 0;
-let _quizQuestions = [];
 let _timerEnabled  = false;
-
-const CIRC = 2 * Math.PI * 18; // svg circle circumference (r=18)
+let _quizQuestions = [];
+const CIRC = 113; // 2π × 18
 
 function stopTimer() {
   if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
@@ -144,67 +161,60 @@ function startTimerForQuestion(idx) {
   stopTimer();
   if (!_timerEnabled || _timerTotal === 0) return;
 
-  const ring    = $('quizTimerDisplay');
-  const countEl = $('timerCount');
-  const circle  = $('timerCircle');
-  const ringEl  = ring.querySelector('.timer-ring');
+  const display  = $('quizTimerDisplay');
+  const countEl  = $('timerCount');
+  const circle   = $('timerCircle');
+  const ringEl   = $('timerRingEl');
 
-  ring.style.display = 'flex';
-  ringEl.className   = 'timer-ring';
-  _timerSecs         = _timerTotal;
-  countEl.textContent = _timerSecs;
-  circle.style.strokeDashoffset = 0;
+  display.style.display = 'flex';
+  ringEl.className      = 'timer-ring';
+  let secs = _timerTotal;
+  countEl.textContent = secs;
+  circle.style.strokeDashoffset = '0';
 
   _timerInterval = setInterval(() => {
-    _timerSecs--;
-    countEl.textContent = _timerSecs;
+    secs--;
+    countEl.textContent = secs;
+    circle.style.strokeDashoffset = String((1 - secs / _timerTotal) * CIRC);
 
-    // Shrink the ring arc
-    const progress = 1 - (_timerSecs / _timerTotal);
-    circle.style.strokeDashoffset = progress * CIRC;
+    if (secs <= _timerTotal * 0.25)     ringEl.className = 'timer-ring danger';
+    else if (secs <= _timerTotal * 0.5) ringEl.className = 'timer-ring warning';
 
-    // Colour warnings
-    if (_timerSecs <= _timerTotal * 0.25) {
-      ringEl.className = 'timer-ring danger';
-    } else if (_timerSecs <= _timerTotal * 0.5) {
-      ringEl.className = 'timer-ring warning';
-    }
-
-    if (_timerSecs <= 0) {
+    if (secs <= 0) {
       stopTimer();
-      // Auto-lock unanswered question
-      const opts = document.querySelectorAll(`.opt[data-idx="${idx}"]`);
-      if (opts.length && !opts[0].closest('.qcard').classList.contains('answered')) {
-        opts.forEach(o => {
-          o.style.pointerEvents = 'none';
-          if (parseInt(o.dataset.opt) === parseInt(o.dataset.correct)) {
-            o.classList.add('timed-out');
-          }
-        });
-        $(`ans-${idx}`).classList.add('show');
-        const qcard = opts[0].closest('.qcard');
-        qcard.classList.add('answered');
-        showToast(`⏰ Time's up! Moving on…`, 'info');
-
-        // Auto-advance to next question after 1.5s
-        setTimeout(() => {
-          const next = idx + 1;
-          if (next < _quizQuestions.length) {
-            _currentQIdx = next;
-            updateProgress();
-            startTimerForQuestion(next);
-            // Scroll to next question
-            const nextCard = document.querySelectorAll('.qcard')[next];
-            if (nextCard) nextCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          } else {
-            stopTimer();
-            $('quizTimerDisplay').style.display = 'none';
-            showToast('Quiz complete!', 'ok');
-          }
-        }, 1500);
-      }
+      lockQuestion(idx, true);
+      showToast('⏰ Time\'s up!', 'info');
+      setTimeout(() => advanceTo(idx + 1), 1500);
     }
   }, 1000);
+}
+
+function lockQuestion(idx, timedOut = false) {
+  const qcard = document.querySelectorAll('.qcard')[idx];
+  if (!qcard || qcard.classList.contains('answered')) return;
+  qcard.classList.add('answered');
+  const opts = qcard.querySelectorAll('.opt');
+  opts.forEach(o => {
+    o.style.pointerEvents = 'none';
+    if (parseInt(o.dataset.opt) === parseInt(o.dataset.correct)) {
+      o.classList.add(timedOut ? 'timed-out' : 'correct');
+    }
+  });
+  const reveal = qcard.querySelector('.ans-reveal');
+  if (reveal) reveal.classList.add('show');
+  updateProgress();
+}
+
+function advanceTo(idx) {
+  if (idx >= _quizQuestions.length) {
+    stopTimer();
+    $('quizTimerDisplay').style.display = 'none';
+    showToast('Quiz complete! 🎉', 'ok');
+    return;
+  }
+  const cards = document.querySelectorAll('.qcard');
+  if (cards[idx]) cards[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  startTimerForQuestion(idx);
 }
 
 function updateProgress() {
@@ -214,7 +224,6 @@ function updateProgress() {
 
 function renderQuiz(questions) {
   _quizQuestions = questions;
-  _currentQIdx   = 0;
   const container = $('quizResult');
   container.innerHTML = '';
 
@@ -224,7 +233,7 @@ function renderQuiz(questions) {
     card.innerHTML = `
       <div class="qnum">Question ${i + 1} of ${questions.length}</div>
       <div class="qtext">${q.question}</div>
-      <div class="opts" id="opts-${i}">
+      <div class="opts">
         ${q.options.map((opt, j) => `
           <div class="opt" data-idx="${i}" data-opt="${j}" data-correct="${q.answer_index}">
             <span class="opt-lt">${String.fromCharCode(65 + j)}</span>
@@ -232,13 +241,12 @@ function renderQuiz(questions) {
           </div>`).join('')}
       </div>
       <div class="ans-reveal" id="ans-${i}">
-        ✅ Correct answer: <strong>${q.options[q.answer_index]}</strong>
-        ${q.explanation ? `<br><span style="opacity:.8">${q.explanation}</span>` : ''}
+        ✅ Correct: <strong>${q.options[q.answer_index]}</strong>
+        ${q.explanation ? `<br><span style="opacity:.8;font-size:.85em">${q.explanation}</span>` : ''}
       </div>`;
     container.appendChild(card);
   });
 
-  // Click handlers
   document.querySelectorAll('.opt').forEach(opt => {
     opt.addEventListener('click', () => {
       const idx     = parseInt(opt.dataset.idx);
@@ -249,61 +257,46 @@ function renderQuiz(questions) {
 
       stopTimer();
       qcard.classList.add('answered');
-      const group = document.querySelectorAll(`.opt[data-idx="${idx}"]`);
-      group.forEach(o => o.style.pointerEvents = 'none');
+      qcard.querySelectorAll('.opt').forEach(o => o.style.pointerEvents = 'none');
       opt.classList.add(chosen === correct ? 'correct' : 'wrong');
-      if (chosen !== correct) group[correct].classList.add('correct');
-      $(`ans-${idx}`).classList.add('show');
-
+      if (chosen !== correct) qcard.querySelectorAll('.opt')[correct].classList.add('correct');
+      document.getElementById(`ans-${idx}`).classList.add('show');
       updateProgress();
 
-      // Auto-advance to next if timer mode
-      if (_timerEnabled) {
-        const next = idx + 1;
-        setTimeout(() => {
-          if (next < _quizQuestions.length) {
-            _currentQIdx = next;
-            startTimerForQuestion(next);
-            const nextCard = document.querySelectorAll('.qcard')[next];
-            if (nextCard) nextCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          } else {
-            $('quizTimerDisplay').style.display = 'none';
-            showToast('Quiz complete! 🎉', 'ok');
-          }
-        }, 800);
-      }
+      if (_timerEnabled) setTimeout(() => advanceTo(idx + 1), 700);
     });
   });
 
   updateProgress();
-  $('quizProgress').textContent = `0 / ${questions.length} answered`;
 }
 
 $('btnQuiz').addEventListener('click', async () => {
-  const topic      = $('quizTopic').value.trim();
-  const chapter    = $('quizChapter').value.trim();   // ← NEW
-  const difficulty = getActivePill('quizDiff') || 'medium';
-  const numQ       = parseInt(getActivePill('quizNumQ') || '10'); // ← NEW
-  const timerSecs  = parseInt(getActivePill('quizTimer') || '30'); // ← NEW
+  if (!_selectedSubject) {
+    $('subjHint').style.display = 'block';
+    showToast('Please select a subject.', 'err');
+    return;
+  }
 
-  if (!topic) { showToast('Please enter a topic.', 'err'); return; }
+  const chapter   = $('quizChapter').value.trim();
+  const difficulty = getActivePill('quizDiff') || 'medium';
+  const numQ      = parseInt(getActivePill('quizNumQ') || '10');
+  const timerSecs = parseInt(getActivePill('quizTimer') || '0');
 
   stopTimer();
   _timerEnabled = timerSecs > 0;
   _timerTotal   = timerSecs;
 
-  showLoader('Generating quiz questions…');
+  showLoader('Generating quiz…');
   try {
     const d = await postJSON('/generate_quiz', {
-      topic,
-      chapter,                    // ← NEW
+      subject      : _selectedSubject,   // ← subject, not topic
+      chapter,
       difficulty,
-      num_questions: numQ,        // ← NEW
+      num_questions: numQ,
     });
 
-    $('quizSbjTitle').textContent = `Quiz — ${d.subject}${chapter ? ' · ' + chapter : ''}`;
+    $('quizSbjTitle').textContent = `${_selectedSubject} Quiz${chapter ? ' · ' + chapter : ''}`;
     renderQuiz(d.questions);
-    $('quizMNote').textContent = `Model: ${d.model_used}`;
     $('quizOutput').style.display = 'block';
 
     if (d.chart_b64) {
@@ -311,7 +304,6 @@ $('btnQuiz').addEventListener('click', async () => {
       $('qChartWrap').style.display = 'block';
     }
 
-    // Start timer for question 0
     if (_timerEnabled) {
       $('quizTimerDisplay').style.display = 'flex';
       startTimerForQuestion(0);
@@ -330,26 +322,15 @@ $('btnQuiz').addEventListener('click', async () => {
 
 $('revealAll').addEventListener('click', () => {
   stopTimer();
-  document.querySelectorAll('.ans-reveal').forEach(el => el.classList.add('show'));
-  document.querySelectorAll('.opt').forEach(opt => {
-    opt.style.pointerEvents = 'none';
-    const qcard = opt.closest('.qcard');
-    if (!qcard.classList.contains('answered')) {
-      qcard.classList.add('answered');
-      if (parseInt(opt.dataset.opt) === parseInt(opt.dataset.correct)) {
-        opt.classList.add('correct');
-      }
-    }
-  });
   $('quizTimerDisplay').style.display = 'none';
-  updateProgress();
+  document.querySelectorAll('.qcard').forEach((card, i) => lockQuestion(i));
 });
 
 // ════════════════════════════════════════════════════════════════
-//  3. TEXT SUMMARIZER  (text tab + image/camera tab)
+//  SUMMARIZER
 // ════════════════════════════════════════════════════════════════
 
-// ── Tab switching ──────────────────────────────────────────────
+// Tab switching
 document.querySelectorAll('.itab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.itab').forEach(t => t.classList.remove('active'));
@@ -360,128 +341,101 @@ document.querySelectorAll('.itab').forEach(tab => {
   });
 });
 
-// ── Character counter ──────────────────────────────────────────
 $('summText').addEventListener('input', function () {
   $('charCount').textContent = `${this.value.length} characters`;
 });
 
-// ── Text summarise ─────────────────────────────────────────────
 $('btnSumm').addEventListener('click', async () => {
   const text = $('summText').value.trim();
   if (text.length < 50) { showToast('Please enter at least 50 characters.', 'err'); return; }
-  await runSummarise({ text });
+  await runSummarise({ text }, '✏️ Source: Pasted Text');
 });
 
-// ── Image upload / camera state ────────────────────────────────
-let _capturedImageB64 = null;
-let _cameraStream     = null;
+// Image handlers for summarizer
+let _summImageB64  = null;
+let _summStream    = null;
 
-function setImagePreview(src, name) {
-  _capturedImageB64 = src;
-  $('notePreview').src           = src;
-  $('notePreview').style.display = 'block';
-  $('cameraPlaceholder').style.display = 'none';
-  $('imageName').textContent     = name || '';
-  $('imageActions').style.display = 'flex';
+function summSetPreview(src, name) {
+  _summImageB64 = src;
+  $('summNotePreview').src           = src;
+  $('summNotePreview').style.display = 'block';
+  $('summCameraPlaceholder').style.display = 'none';
+  $('summImageName').textContent     = name || '';
+  $('summImageActions').style.display = 'flex';
+}
+function summClearImage() {
+  _summImageB64 = null;
+  $('summNotePreview').style.display      = 'none';
+  $('summCameraPlaceholder').style.display = 'block';
+  $('summImageActions').style.display     = 'none';
+  $('summImageName').textContent          = '';
+  $('summFileInput').value                = '';
+}
+function summStopCamera() {
+  if (_summStream) { _summStream.getTracks().forEach(t => t.stop()); _summStream = null; }
+  $('summCaptureControls').style.display = 'none';
+  $('summCameraFeed').srcObject = null;
 }
 
-function clearImage() {
-  _capturedImageB64 = null;
-  $('notePreview').style.display      = 'none';
-  $('cameraPlaceholder').style.display = 'block';
-  $('imageActions').style.display     = 'none';
-  $('imageName').textContent          = '';
-  $('fileInput').value                = '';
-}
-
-// Browse file
-$('btnBrowse').addEventListener('click', () => $('fileInput').click());
-$('fileInput').addEventListener('change', function () {
-  const file = this.files[0];
-  if (!file) return;
-  if (!file.type.startsWith('image/')) { showToast('Please select an image file.', 'err'); return; }
-  const reader = new FileReader();
-  reader.onload = e => setImagePreview(e.target.result, file.name);
-  reader.readAsDataURL(file);
+$('summBtnBrowse').addEventListener('click', () => $('summFileInput').click());
+$('summFileInput').addEventListener('change', function () {
+  const f = this.files[0];
+  if (!f || !f.type.startsWith('image/')) return;
+  const r = new FileReader();
+  r.onload = e => summSetPreview(e.target.result, f.name);
+  r.readAsDataURL(f);
 });
+$('summBtnCamera').addEventListener('click', async () => {
+  try {
+    _summStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    $('summCameraFeed').srcObject         = _summStream;
+    $('summCaptureControls').style.display = 'block';
+    $('summCameraPlaceholder').style.display = 'none';
+  } catch { showToast('Camera not available. Try uploading a file.', 'err'); }
+});
+$('summBtnSnap').addEventListener('click', () => {
+  const v = $('summCameraFeed'), c = $('summSnapCanvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  const url = c.toDataURL('image/jpeg', 0.92);
+  summStopCamera();
+  summSetPreview(url, 'camera-capture.jpg');
+});
+$('summBtnCancelCam').addEventListener('click', () => {
+  summStopCamera();
+  $('summCameraPlaceholder').style.display = 'block';
+});
+$('summBtnClearImage').addEventListener('click', summClearImage);
 
 // Drag & drop
-const cz = $('cameraZone');
-cz.addEventListener('dragover', e => { e.preventDefault(); cz.classList.add('drag-over'); });
-cz.addEventListener('dragleave', () => cz.classList.remove('drag-over'));
-cz.addEventListener('drop', e => {
-  e.preventDefault();
-  cz.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) {
-    const reader = new FileReader();
-    reader.onload = ev => setImagePreview(ev.target.result, file.name);
-    reader.readAsDataURL(file);
+const scz = $('summCameraZone');
+scz.addEventListener('dragover', e => { e.preventDefault(); scz.classList.add('drag-over'); });
+scz.addEventListener('dragleave', () => scz.classList.remove('drag-over'));
+scz.addEventListener('drop', e => {
+  e.preventDefault(); scz.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) {
+    const r = new FileReader();
+    r.onload = ev => summSetPreview(ev.target.result, f.name);
+    r.readAsDataURL(f);
   }
 });
 
-// Camera
-$('btnCamera').addEventListener('click', async () => {
-  try {
-    _cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    $('cameraFeed').srcObject      = _cameraStream;
-    $('captureControls').style.display = 'block';
-    $('cameraPlaceholder').style.display = 'none';
-  } catch {
-    showToast('Camera not available. Try uploading a file instead.', 'err');
-  }
-});
-
-$('btnSnap').addEventListener('click', () => {
-  const video  = $('cameraFeed');
-  const canvas = $('snapCanvas');
-  canvas.width  = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-  stopCamera();
-  setImagePreview(dataUrl, 'camera-capture.jpg');
-});
-
-$('btnCancelCam').addEventListener('click', () => {
-  stopCamera();
-  $('cameraPlaceholder').style.display = 'block';
-});
-
-function stopCamera() {
-  if (_cameraStream) { _cameraStream.getTracks().forEach(t => t.stop()); _cameraStream = null; }
-  $('captureControls').style.display = 'none';
-  $('cameraFeed').srcObject = null;
-}
-
-$('btnClearImage').addEventListener('click', clearImage);
-
-// Summarise from image
 $('btnSummImage').addEventListener('click', async () => {
-  if (!_capturedImageB64) { showToast('Please upload or capture an image of your notes.', 'err'); return; }
-  // Strip the data:image/...;base64, prefix → send pure base64
-  const b64 = _capturedImageB64.split(',')[1];
-  await runSummarise({ image_data: b64 });
+  if (!_summImageB64) { showToast('Please upload or capture an image.', 'err'); return; }
+  const b64 = _summImageB64.split(',')[1];
+  await runSummarise({ image_data: b64 }, '📷 Source: Uploaded Image');
 });
 
-// ── Shared summarise logic ─────────────────────────────────────
-async function runSummarise(payload) {
+async function runSummarise(payload, sourceLabel) {
   showLoader('Analysing & summarising…');
   try {
     const d = await postJSON('/summarize', payload);
     $('summResult').textContent = d.summary;
-
-    $('kwResult').innerHTML = (d.keywords || [])
-      .map(k => `<span class="kw">${k}</span>`).join('');
-
-    $('bpResult').innerHTML = (d.bullet_points || [])
-      .map(b => `<li>${b}</li>`).join('');
-
-    $('summMNote').textContent = `Model: ${d.model_used}`;
-    $('summSourceBadge').textContent = payload.image_data
-      ? '📷 Source: Uploaded / Captured Notes Image'
-      : '✏️ Source: Pasted Text';
-    $('summOutput').style.display = 'block';
+    $('kwResult').innerHTML     = (d.keywords || []).map(k => `<span class="kw">${k}</span>`).join('');
+    $('bpResult').innerHTML     = (d.bullet_points || []).map(b => `<li>${b}</li>`).join('');
+    $('summSourceBadge').textContent = sourceLabel || '';
+    $('summOutput').style.display   = 'block';
     showToast('Summary ready!', 'ok');
   } catch (e) {
     showToast(e.message, 'err');
@@ -491,25 +445,19 @@ async function runSummarise(payload) {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  4. STUDY TIPS
+//  STUDY TIPS
 // ════════════════════════════════════════════════════════════════
-
 $('btnTips').addEventListener('click', async () => {
   const subject = $('tipsSubject').value.trim();
   const text    = $('tipsText').value.trim();
   if (!subject && !text) { showToast('Please enter a subject or some text.', 'err'); return; }
-
-  showLoader('Extracting tips with NLTK…');
+  showLoader('Generating tips…');
   try {
     const d = await postJSON('/study_tips', { subject, text });
-
-    $('tipsKw').innerHTML = (d.keywords || [])
-      .map(k => `<span class="kw">${k}</span>`).join('');
-
+    $('tipsKw').innerHTML   = (d.keywords || []).map(k => `<span class="kw">${k}</span>`).join('');
     $('tipsList').innerHTML = (d.tips || []).map(t => `<li>${t}</li>`).join('');
-
     $('tipsOutput').style.display = 'block';
-    showToast('Tips generated!', 'ok');
+    showToast('Tips ready!', 'ok');
   } catch (e) {
     showToast(e.message, 'err');
   } finally {
@@ -518,81 +466,120 @@ $('btnTips').addEventListener('click', async () => {
 });
 
 // ════════════════════════════════════════════════════════════════
-//  5. FEEDBACK  (marks-based score + chapter strategies)
+//  FEEDBACK  (image upload — no marks)
 // ════════════════════════════════════════════════════════════════
+let _fbImageB64 = null;
+let _fbStream   = null;
 
-function calcPct() {
-  const obtained = parseFloat($('fbScoreObtained').value);
-  const total    = parseFloat($('fbScoreTotal').value);
-  if (!isNaN(obtained) && !isNaN(total) && total > 0) {
-    const pct = Math.round((obtained / total) * 100);
-    $('fbScorePct').textContent = `${pct}%`;
-    return pct;
-  }
-  $('fbScorePct').textContent = '—';
-  return null;
+function fbSetPreview(src, name) {
+  _fbImageB64 = src;
+  $('fbPaperPreview').src           = src;
+  $('fbPaperPreview').style.display = 'block';
+  $('fbCameraPlaceholder').style.display = 'none';
+  $('fbImageName').textContent      = name || '';
+  $('fbImageActions').style.display = 'flex';
+}
+function fbClearImage() {
+  _fbImageB64 = null;
+  $('fbPaperPreview').style.display      = 'none';
+  $('fbCameraPlaceholder').style.display = 'block';
+  $('fbImageActions').style.display      = 'none';
+  $('fbImageName').textContent           = '';
+  $('fbFileInput').value                 = '';
+}
+function fbStopCamera() {
+  if (_fbStream) { _fbStream.getTracks().forEach(t => t.stop()); _fbStream = null; }
+  $('fbCaptureControls').style.display = 'none';
+  $('fbCameraFeed').srcObject = null;
 }
 
-$('fbScoreObtained').addEventListener('input', calcPct);
-$('fbScoreTotal').addEventListener('input', calcPct);
+$('fbBtnBrowse').addEventListener('click', () => $('fbFileInput').click());
+$('fbFileInput').addEventListener('change', function () {
+  const f = this.files[0];
+  if (!f || !f.type.startsWith('image/')) return;
+  const r = new FileReader();
+  r.onload = e => fbSetPreview(e.target.result, f.name);
+  r.readAsDataURL(f);
+});
+$('fbBtnCamera').addEventListener('click', async () => {
+  try {
+    _fbStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    $('fbCameraFeed').srcObject          = _fbStream;
+    $('fbCaptureControls').style.display = 'block';
+    $('fbCameraPlaceholder').style.display = 'none';
+  } catch { showToast('Camera not available. Try uploading a file.', 'err'); }
+});
+$('fbBtnSnap').addEventListener('click', () => {
+  const v = $('fbCameraFeed'), c = $('fbSnapCanvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  const url = c.toDataURL('image/jpeg', 0.92);
+  fbStopCamera();
+  fbSetPreview(url, 'question-paper.jpg');
+});
+$('fbBtnCancelCam').addEventListener('click', () => {
+  fbStopCamera();
+  $('fbCameraPlaceholder').style.display = 'block';
+});
+$('fbBtnClearImage').addEventListener('click', fbClearImage);
+
+// Drag & drop feedback zone
+const fbcz = $('fbCameraZone');
+fbcz.addEventListener('dragover', e => { e.preventDefault(); fbcz.classList.add('drag-over'); });
+fbcz.addEventListener('dragleave', () => fbcz.classList.remove('drag-over'));
+fbcz.addEventListener('drop', e => {
+  e.preventDefault(); fbcz.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) {
+    const r = new FileReader();
+    r.onload = ev => fbSetPreview(ev.target.result, f.name);
+    r.readAsDataURL(f);
+  }
+});
 
 $('btnFb').addEventListener('click', async () => {
-  const student_name = $('fbName').value.trim() || 'Student';
-  const subject      = $('fbSubject').value.trim() || 'General';
-  const obtained     = parseFloat($('fbScoreObtained').value);
-  const total        = parseFloat($('fbScoreTotal').value);
-  const chapter      = $('fbChapter').value.trim();  // ← NEW
+  const name    = $('fbName').value.trim() || 'Student';
+  const subject = $('fbSubject').value.trim() || 'General';
 
-  if (isNaN(obtained) || isNaN(total) || total <= 0) {
-    showToast('Please enter valid score and total marks.', 'err');
+  if (!_fbImageB64) {
+    showToast('Please upload or capture your question paper.', 'err');
     return;
   }
-  const quiz_score = Math.round((obtained / total) * 100);
 
-  showLoader('Generating personalised feedback…');
+  const b64 = _fbImageB64.split(',')[1];
+
+  showLoader('Analysing your question paper…');
   try {
     const d = await postJSON('/feedback', {
-      student_name,
+      student_name : name,
       subject,
-      quiz_score,
-      score_obtained: obtained,   // ← NEW: raw marks
-      score_total   : total,      // ← NEW: total marks
-      chapter_topic : chapter,    // ← NEW: chapter focus
+      image_data   : b64,   // ← image, no marks
     });
 
-    // Score display
-    $('scoreNum').textContent  = `${obtained}`;
-    $('scoreDenom').textContent = `/${total}`;
-    $('scorePctBadge').textContent = `${quiz_score}%`;
+    $('fbTitle').textContent   = `Feedback for ${name}`;
+    $('fbGreeting').textContent = d.greeting || '';
+    $('fbMsg').textContent     = d.message;
 
-    const ring = $('scoreRing');
-    ring.style.borderColor = quiz_score >= 75
-      ? 'var(--green)' : quiz_score >= 50
-      ? 'var(--gold)'  : 'var(--red)';
-    ring.style.boxShadow = quiz_score >= 75
-      ? '0 0 20px var(--green)' : quiz_score >= 50
-      ? '0 0 20px var(--gold-glow)' : '0 0 20px rgba(248,113,113,.4)';
-
-    $('fbMsg').textContent  = d.message;
-    $('fbNext').textContent = d.next_step;
-    $('fbMNote').textContent = `Model: ${d.model_used}`;
-
-    // ← NEW: Chapter improvement strategies
-    const strategiesWrap = $('fbStrategiesWrap');
-    const strategiesEl   = $('fbStrategies');
-
+    // Strategies / topics to focus
+    const wrap = $('fbStrategiesWrap');
     if (d.strategies && d.strategies.length > 0) {
-      strategiesEl.innerHTML = d.strategies.map(s => `
+      $('fbStrategies').innerHTML = d.strategies.map(s => `
         <div class="strategy-card">
           <div class="strategy-chapter">📖 ${s.chapter}</div>
           <div class="strategy-body">
             <p>${s.weakness}</p>
-            <ul>${s.tips.map(t => `<li>${t}</li>`).join('')}</ul>
+            <ul>${(s.tips || []).map(t => `<li>${t}</li>`).join('')}</ul>
           </div>
         </div>`).join('');
-      strategiesWrap.style.display = 'block';
+      wrap.style.display = 'block';
     } else {
-      strategiesWrap.style.display = 'none';
+      wrap.style.display = 'none';
+    }
+
+    // Next step
+    if (d.next_step) {
+      $('fbNext').textContent      = d.next_step;
+      $('fbNextWrap').style.display = 'block';
     }
 
     $('fbOutput').style.display = 'block';
@@ -605,45 +592,37 @@ $('btnFb').addEventListener('click', async () => {
 });
 
 // ════════════════════════════════════════════════════════════════
-//  6. RESOURCES
+//  RESOURCES
 // ════════════════════════════════════════════════════════════════
-
 $('btnEda').addEventListener('click', async () => {
-  showLoader('Loading Matplotlib chart…');
+  showLoader('Loading chart…');
   try {
     const res  = await fetch('/chart/distribution');
     const text = await res.text();
-    if (!text || text.trim() === '') throw new Error('Empty response');
+    if (!text || text.trim() === '' || text.trim().startsWith('<!'))
+      throw new Error('Chart unavailable');
     const d = JSON.parse(text);
     if (d.chart_b64) {
       $('edaImg').src = `data:image/png;base64,${d.chart_b64}`;
       $('edaImg').style.display = 'block';
     }
-  } catch (e) {
-    showToast(e.message, 'err');
-  } finally {
-    hideLoader();
-  }
+  } catch (e) { showToast(e.message, 'err'); }
+  finally { hideLoader(); }
 });
 
 $('btnRes').addEventListener('click', async () => {
   const subject = $('resSubject').value.trim();
   if (!subject) { showToast('Please enter a subject.', 'err'); return; }
-
-  showLoader('Clustering resources with K-means…');
+  showLoader('Finding resources…');
   try {
     const d = await postJSON('/resources', { subject });
-
     $('resSbjTitle').textContent = `Resources — ${d.subject}`;
-    $('resMNote').textContent    = `Cluster: ${d.cluster_label} · Model: ${d.model_used}`;
-
     $('resGrid').innerHTML = (d.resources || []).map(r => `
       <a class="res-card" href="${r.url || '#'}" target="_blank" rel="noopener">
         <div class="res-type">${r.type || 'Resource'}</div>
         <div class="res-title">${r.title}</div>
         <div class="res-desc">${r.description || ''}</div>
       </a>`).join('');
-
     $('resOutput').style.display = 'block';
     showToast('Resources found!', 'ok');
   } catch (e) {
