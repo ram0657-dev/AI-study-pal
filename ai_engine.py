@@ -667,45 +667,67 @@ def _infer_subject(topic_text: str) -> str:
     return best if scores[best] > 0 else random.choice(list(_SUBJECT_KEYWORDS.keys()))
 
 
-def generate_quiz(topic: str, difficulty: str, n: int = 5) -> dict:
+def generate_quiz(topic: str, difficulty: str, chapter: str = '',
+                  num_questions: int = 10) -> dict:
     """
-    Returns n MCQs on the requested topic and difficulty level.
+    Returns num_questions MCQs on the requested topic/chapter and difficulty level.
     Uses Logistic Regression to classify question difficulty,
     then selects the closest matching questions.
+
+    Options are returned as a list; answer_index is a 0-based integer
+    so that the frontend (script.js) can render them directly.
     """
     global _quiz_vectorizer, _quiz_classifier
 
-    subject       = _infer_subject(topic)
-    diff_int      = _DIFF_MAP.get(difficulty.lower(), 1)
+    # Combine topic + chapter for subject inference
+    combined_text = (topic + ' ' + chapter).strip()
+    subject  = _infer_subject(combined_text)
+    diff_int = _DIFF_MAP.get(difficulty.lower(), 1)
 
-    # Filter dataset by subject first
+    # Filter dataset by subject
     subject_qs = [q for q in QUESTIONS_DATASET if q['subject'] == subject]
     if not subject_qs:
         subject_qs = QUESTIONS_DATASET[:]
 
-    # ML-based difficulty prediction (re-classify to see model output)
+    # Further filter by chapter keyword if provided
+    if chapter:
+        chapter_lower = chapter.lower()
+        chapter_qs = [q for q in subject_qs if chapter_lower in q['topic'].lower()
+                      or any(w in q['question'].lower() for w in chapter_lower.split())]
+        if chapter_qs:
+            subject_qs = chapter_qs  # use chapter-filtered set if non-empty
+
+    # ML-based difficulty scoring
     texts = [q['question'] + ' ' + q['topic'] for q in subject_qs]
     X = _quiz_vectorizer.transform(texts)
     predicted_diffs = _quiz_classifier.predict(X)
 
-    # Combine ground-truth label and ML prediction (average them)
     scored = []
     for i, q in enumerate(subject_qs):
         ml_diff  = int(predicted_diffs[i])
         gt_diff  = q['difficulty']
         combined = round((ml_diff + gt_diff) / 2)
-        scored.append((abs(combined - diff_int), q))  # sort by closeness to target
+        scored.append((abs(combined - diff_int), q))
 
     scored.sort(key=lambda x: (x[0], random.random()))
+
+    # Clamp num_questions to available pool
+    n = max(1, min(int(num_questions), len(scored)))
     selected = [s[1] for s in scored[:n]]
 
-    # Format output
+    # ── Format output ─────────────────────────────────────────────
+    # IMPORTANT: convert options dict {"A":..,"B":..} → list
+    #            convert answer letter "C" → answer_index integer 2
+    #            so that script.js can render them with .map()
     questions = []
     for q in selected:
+        opts_list    = [q['options']['A'], q['options']['B'],
+                        q['options']['C'], q['options']['D']]
+        answer_index = ord(q['answer'].upper()) - ord('A')   # "C" → 2
         questions.append({
             "question":    q['question'],
-            "options":     q['options'],
-            "answer":      q['answer'],
+            "options":     opts_list,          # ← array, not dict
+            "answer_index": answer_index,      # ← integer, not letter
             "explanation": q['explanation'],
             "subject":     q['subject'],
             "topic":       q['topic'],
@@ -730,9 +752,34 @@ def generate_quiz(topic: str, difficulty: str, n: int = 5) -> dict:
 #  SECTION 4 — TEXT SUMMARIZER  (Keras Dense NN + NLTK)
 # ================================================================
 
-def summarize_text(text: str) -> dict:
+def _ocr_image(image_bytes: bytes) -> str:
     """
-    Extractive summariser:
+    Extract text from an image using pytesseract (if installed) or
+    Pillow-only fallback that returns a descriptive error message.
+    """
+    try:
+        from PIL import Image
+        import pytesseract
+        img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+        extracted = pytesseract.image_to_string(img)
+        return extracted.strip() if extracted.strip() else ''
+    except ImportError:
+        # pytesseract / tesseract not installed — graceful degradation
+        return ''
+    except Exception:
+        return ''
+
+
+def summarize_text(text: str, image_bytes: bytes = None) -> dict:
+    """
+    Extractive summariser — accepts either plain text OR raw image bytes.
+
+    Image path (NEW):
+      1. pytesseract OCR → extract text from image
+      2. Proceed with extracted text through normal pipeline
+      Falls back gracefully if pytesseract / tesseract not installed.
+
+    Text path:
       1. NLTK splits text into sentences
       2. TF-IDF vectorises each sentence (64 features)
       3. Keras Dense NN scores sentence importance
@@ -740,6 +787,24 @@ def summarize_text(text: str) -> dict:
       5. NLTK extracts top keywords
     Falls back to TF-IDF ranking if Keras unavailable.
     """
+    # ── Image OCR path ───────────────────────────────────────────
+    if image_bytes:
+        ocr_text = _ocr_image(image_bytes)
+        if ocr_text and len(ocr_text) >= 50:
+            text = ocr_text
+        else:
+            # OCR failed or returned too little text — return informative result
+            return {
+                "summary":       "Image received. For best results install pytesseract "
+                                 "(pip install pytesseract) and Tesseract OCR on the server. "
+                                 "Alternatively, paste your notes as text.",
+                "keywords":      [],
+                "bullet_points": ["📷 Image uploaded successfully",
+                                  "⚠ OCR engine not available on this server",
+                                  "💡 Tip: paste your notes as text for instant summarisation"],
+                "model_used":    "OCR Fallback (pytesseract not installed)",
+            }
+
     # ── Step 1: Sentence tokenisation (NLTK) ────────────────────
     try:
         sentences = sent_tokenize(text)
@@ -838,13 +903,21 @@ _SUBJECT_TOPICS = {
 }
 
 
-def generate_study_plan(subject: str, hours_per_day: float, exam_date_str: str) -> dict:
+def generate_study_plan(subject: str, hours_per_day: float,
+                        exam_date_str: str, chapters: list = None) -> dict:
     """
     Builds a day-by-day study plan using Pandas date ranges.
+    If 'chapters' list is provided, those chapter names are used
+    as the topic sequence instead of the default topic bank.
     Returns the plan as text + a structured CSV-ready list.
     """
     inferred = _infer_subject(subject)
-    topics   = _SUBJECT_TOPICS.get(inferred, [f"Topic {i+1}" for i in range(10)])
+
+    # ── Use user-supplied chapters if provided ───────────────────
+    if chapters and len(chapters) > 0:
+        topics = chapters
+    else:
+        topics = _SUBJECT_TOPICS.get(inferred, [f"Topic {i+1}" for i in range(10)])
 
     # Date maths
     today     = datetime.today().date()
@@ -917,10 +990,15 @@ def generate_study_plan(subject: str, hours_per_day: float, exam_date_str: str) 
 #  SECTION 7 — MOTIVATIONAL FEEDBACK  (Keras Embedding NN)
 # ================================================================
 
-def generate_feedback(subject: str, quiz_score: int, student_name: str = 'Student') -> dict:
+def generate_feedback(subject: str, quiz_score: int,
+                      student_name: str = 'Student',
+                      score_obtained: float = None,
+                      score_total: float = None,
+                      chapters: list = None) -> dict:
     """
     1. Keras Embedding + Dense model classifies score → feedback category.
     2. Template system generates personalised text.
+    3. Per-chapter improvement strategies returned when chapters supplied.
     """
     global _feedback_model, _feedback_vocab
 
@@ -951,12 +1029,56 @@ def generate_feedback(subject: str, quiz_score: int, student_name: str = 'Studen
     elif category_key == "average":    next_step = "Revisit the study tips for this subject and schedule a focused revision session."
     else:                               next_step = "Go back to basics — start with easy questions and build confidence step by step."
 
+    # ── Per-chapter improvement strategies ───────────────────────
+    strategies = []
+    if chapters:
+        _improvement_tips = {
+            "excellent": [
+                "Extend your knowledge by trying harder past-paper questions on this chapter.",
+                "Create a one-page summary cheat-sheet to help classmates.",
+                "Explore advanced concepts beyond the syllabus for deeper understanding.",
+            ],
+            "good": [
+                "Review the questions you got wrong in this chapter specifically.",
+                "Re-read your notes and highlight any concepts that still feel uncertain.",
+                "Attempt 5 more practice problems focusing on this topic.",
+            ],
+            "average": [
+                "Re-study this chapter from the beginning using a different resource (video/textbook).",
+                "Make a list of every formula or definition in this chapter and memorise them.",
+                "Attempt easy-level questions first to rebuild confidence, then go harder.",
+                "Use the Pomodoro technique: 25 min focused study → 5 min break, repeat 3×.",
+            ],
+            "needs_work": [
+                "Break this chapter into individual sub-topics and tackle one per day.",
+                "Watch a video explanation (Khan Academy / CrashCourse) before re-reading notes.",
+                "Ask your teacher or a peer to walk through the key concepts with you.",
+                "Create flashcards for every key term and test yourself daily.",
+                "Do not move on to new material until the basics here are solid.",
+            ],
+        }
+        tips_pool = _improvement_tips.get(category_key, _improvement_tips["average"])
+
+        for i, chap in enumerate(chapters[:6]):   # max 6 chapters
+            weakness = (
+                f"This chapter needs focused revision — your overall score suggests "
+                f"{'gaps in understanding' if score < 60 else 'room for improvement'} here."
+            )
+            # Cycle through tips slightly differently per chapter
+            chapter_tips = tips_pool[i % len(tips_pool):] + tips_pool[:i % len(tips_pool)]
+            strategies.append({
+                "chapter":  chap,
+                "weakness": weakness,
+                "tips":     chapter_tips[:3],
+            })
+
     return {
-        "message":     message,
-        "category":    category_key,
-        "score":       score,
-        "next_step":   next_step,
-        "model_used":  "Keras Embedding + Dense NN" if KERAS_OK else "Rule-based fallback",
+        "message":    message,
+        "category":   category_key,
+        "score":      score,
+        "next_step":  next_step,
+        "model_used": "Keras Embedding + Dense NN" if KERAS_OK else "Rule-based fallback",
+        "strategies": strategies,   # ← list of per-chapter dicts
     }
 
 
