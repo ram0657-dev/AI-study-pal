@@ -1,384 +1,324 @@
 /* ================================================================
    AI Study Pal — script.js
-   All frontend logic: navigation, API calls, DOM rendering.
+   Handles all frontend logic: navigation, API calls, UI rendering
 ================================================================ */
 
-/* ── Tiny helpers ────────────────────────────────────────────── */
-const $  = id => document.getElementById(id);
-const esc = s  => String(s)
-  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+'use strict';
 
-/* ── Loading overlay ─────────────────────────────────────────── */
-function loader(msg = 'Processing…') {
-  $('overlay').classList.add('on');
-  $('ltxt').textContent = msg;
-}
-function hideLoader() { $('overlay').classList.remove('on'); }
+// ── Utility helpers ──────────────────────────────────────────────
 
-/* ── Toast ───────────────────────────────────────────────────── */
-let toastTimer;
-function toast(msg, type = 'info') {
+const $ = id => document.getElementById(id);
+
+function showToast(msg, type = 'info') {
   const t = $('toast');
   t.textContent = msg;
-  t.className   = `toast on ${type}`;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('on'), 4500);
+  t.className = `toast ${type} on`;
+  setTimeout(() => t.classList.remove('on'), 3000);
 }
 
-/* ── Generic fetch helper ────────────────────────────────────── */
-async function api(url, body, loadMsg) {
-  loader(loadMsg);
-  try {
-    const r = await fetch(url, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body),
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || 'Server error');
-    return d;
-  } catch (e) {
-    toast(e.message, 'err');
-    return null;
-  } finally {
-    hideLoader();
+function showLoader(msg = 'Processing…') {
+  $('ltxt').textContent = msg;
+  $('overlay').classList.add('on');
+}
+
+function hideLoader() {
+  $('overlay').classList.remove('on');
+}
+
+async function postJSON(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  if (!text || text.trim() === '') {
+    throw new Error('Empty response from server');
   }
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error('Unexpected end of JSON input');
+  }
+  if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
+  return data;
 }
 
-/* ── Show base64 chart image ─────────────────────────────────── */
-function showChart(imgId, wrapId, b64) {
-  if (!b64) return;
-  $(imgId).src = `data:image/png;base64,${b64}`;
-  $(wrapId).style.display = 'block';
-}
+// ── Navigation ───────────────────────────────────────────────────
 
-/* ════════════════════════════════════════════════════════════════
-   NAVIGATION
-════════════════════════════════════════════════════════════════ */
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
+    const page = btn.dataset.page;
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById(`page-${btn.dataset.page}`).classList.add('active');
+    $(`page-${page}`).classList.add('active');
+    // Close sidebar on mobile
     $('sidebar').classList.remove('open');
   });
 });
 
-$('ham').addEventListener('click', () => $('sidebar').classList.toggle('open'));
-
-/* ════════════════════════════════════════════════════════════════
-   1.  STUDY PLANNER
-   Backend: /study_plan  →  Pandas date range + Matplotlib chart
-════════════════════════════════════════════════════════════════ */
-const hoursRange = $('planHours');
-const hoursLbl   = $('hoursLbl');
-hoursRange.addEventListener('input', () => {
-  hoursLbl.textContent = `${hoursRange.value} hrs`;
+// Hamburger menu (mobile)
+$('ham').addEventListener('click', () => {
+  $('sidebar').classList.toggle('open');
 });
 
-// Prevent selecting dates in the past
-$('planDate').min = new Date().toISOString().split('T')[0];
+// ── Study Planner ────────────────────────────────────────────────
+
+$('planHours').addEventListener('input', function () {
+  $('hoursLbl').textContent = `${this.value} hrs`;
+});
 
 $('btnPlan').addEventListener('click', async () => {
   const subject = $('planSubject').value.trim();
-  const hours   = parseFloat(hoursRange.value);
+  const hours   = parseFloat($('planHours').value);
   const date    = $('planDate').value;
 
-  if (!subject) { toast('Please enter a subject.', 'err'); return; }
-  if (!date)    { toast('Please select an exam date.', 'err'); return; }
+  if (!subject) { showToast('Please enter a subject.', 'err'); return; }
+  if (!date)    { showToast('Please pick an exam date.', 'err'); return; }
 
-  const data = await api(
-    '/study_plan',
-    { subject, hours_per_day: hours, exam_date: date },
-    'Building your personalised study plan with Pandas…'
-  );
-  if (!data) return;
+  showLoader('Building your study plan…');
+  try {
+    const d = await postJSON('/study_plan', { subject, hours_per_day: hours, exam_date: date });
 
-  // Render plain-text schedule (monospace)
-  $('planResult').textContent = data.plan_text;
-  $('planOutput').style.display = 'block';
+    $('planResult').textContent = d.plan_text;
+    $('planOutput').style.display = 'block';
 
-  // Matplotlib weekly-hours chart
-  showChart('planChart', 'planChartWrap', data.chart_b64);
-
-  $('planOutput').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  toast(`✅  ${data.days_left} days · ${Math.round(data.total_hours)}h total — schedule ready!`, 'ok');
+    if (d.chart_b64) {
+      $('planChart').src = `data:image/png;base64,${d.chart_b64}`;
+      $('planChartWrap').style.display = 'block';
+    }
+    showToast('Study plan ready!', 'ok');
+  } catch (e) {
+    showToast(e.message, 'err');
+  } finally {
+    hideLoader();
+  }
 });
 
-/* ════════════════════════════════════════════════════════════════
-   2.  QUIZ GENERATOR
-   Backend: /generate_quiz  →  TF-IDF + Logistic Regression
-════════════════════════════════════════════════════════════════ */
-document.querySelectorAll('#quizDiff .pl').forEach(p => {
-  p.addEventListener('click', () => {
-    document.querySelectorAll('#quizDiff .pl').forEach(x => x.classList.remove('active'));
-    p.classList.add('active');
+// ── Quiz Generator ───────────────────────────────────────────────
+
+// Difficulty pill selection
+document.querySelectorAll('#quizDiff .pl').forEach(pl => {
+  pl.addEventListener('click', () => {
+    document.querySelectorAll('#quizDiff .pl').forEach(p => p.classList.remove('active'));
+    pl.classList.add('active');
   });
 });
 
-$('btnQuiz').addEventListener('click', async () => {
-  const topic = $('quizTopic').value.trim();
-  const diff  = document.querySelector('#quizDiff .pl.active')?.dataset.val || 'medium';
+function getQuizDifficulty() {
+  const active = document.querySelector('#quizDiff .pl.active');
+  return active ? active.dataset.val : 'medium';
+}
 
-  if (!topic) { toast('Please enter a topic.', 'err'); return; }
-
-  const data = await api(
-    '/generate_quiz',
-    { topic, difficulty: diff },
-    'Classifying difficulty with Logistic Regression…'
-  );
-  if (!data) return;
-
-  $('quizSbjTitle').textContent = `${data.subject} Quiz`;
-  renderQuiz(data.questions);
-  $('quizMNote').textContent = `🤖 Model: ${data.model_used}`;
-
-  showChart('qChart', 'qChartWrap', data.chart_b64);
-
-  $('quizOutput').style.display = 'block';
-  $('quizOutput').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  toast('🎯 Quiz ready — click an option to answer!', 'ok');
-});
-
-/**
- * renderQuiz — builds interactive question cards.
- * Each card: question text → 4 options (click to reveal) → explanation.
- */
 function renderQuiz(questions) {
   const container = $('quizResult');
   container.innerHTML = '';
-
-  questions.forEach((q, idx) => {
+  questions.forEach((q, i) => {
     const card = document.createElement('div');
     card.className = 'qcard';
-    card.dataset.answered = '0';
-
-    const optsHtml = Object.entries(q.options).map(([letter, text]) => `
-      <div class="opt" data-letter="${letter}" data-correct="${q.answer}">
-        <span class="opt-lt">${letter}</span>
-        <span>${esc(text)}</span>
-      </div>`).join('');
-
     card.innerHTML = `
-      <div class="qnum">Question ${idx + 1} &nbsp;·&nbsp; ${esc(q.subject)} &nbsp;·&nbsp; ${esc(q.difficulty)}</div>
-      <div class="qtext">${esc(q.question)}</div>
-      <div class="opts">${optsHtml}</div>
-      <div class="ans-reveal" id="ans-${idx}">
-        ✓ <strong>Correct answer: ${esc(q.answer)}) ${esc(q.options[q.answer])}</strong><br>
-        ${esc(q.explanation)}
+      <div class="qnum">Question ${i + 1}</div>
+      <div class="qtext">${q.question}</div>
+      <div class="opts" id="opts-${i}">
+        ${q.options.map((opt, j) => `
+          <div class="opt" data-idx="${i}" data-opt="${j}" data-correct="${q.answer_index}">
+            <span class="opt-lt">${String.fromCharCode(65 + j)}</span>
+            <span>${opt}</span>
+          </div>`).join('')}
+      </div>
+      <div class="ans-reveal" id="ans-${i}">
+        ✅ Correct answer: <strong>${q.options[q.answer_index]}</strong>
+        ${q.explanation ? `<br><span style="opacity:.8">${q.explanation}</span>` : ''}
       </div>`;
-
-    // Click handler — reveal answer on first click only
-    card.querySelectorAll('.opt').forEach(opt => {
-      opt.addEventListener('click', () => {
-        if (card.dataset.answered === '1') return;
-        card.dataset.answered = '1';
-
-        const chosen  = opt.dataset.letter;
-        const correct = opt.dataset.correct;
-
-        card.querySelectorAll('.opt').forEach(o => {
-          o.style.cursor = 'default';
-          if (o.dataset.letter === correct)  o.classList.add('correct');
-          else if (o.dataset.letter === chosen) o.classList.add('wrong');
-        });
-        document.getElementById(`ans-${idx}`).classList.add('show');
-      });
-    });
-
     container.appendChild(card);
   });
 
-  // "Reveal All Answers" button
-  $('revealAll').onclick = () => {
-    document.querySelectorAll('.qcard').forEach((card, i) => {
-      card.dataset.answered = '1';
-      const correct = card.querySelector('.opt')?.dataset.correct;
-      card.querySelectorAll('.opt').forEach(o => {
-        o.style.cursor = 'default';
-        if (o.dataset.letter === correct) o.classList.add('correct');
-      });
-      const reveal = document.getElementById(`ans-${i}`);
-      if (reveal) reveal.classList.add('show');
+  // Click handlers
+  document.querySelectorAll('.opt').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const idx     = opt.dataset.idx;
+      const chosen  = parseInt(opt.dataset.opt);
+      const correct = parseInt(opt.dataset.correct);
+      const group   = document.querySelectorAll(`.opt[data-idx="${idx}"]`);
+      group.forEach(o => o.style.pointerEvents = 'none');
+      opt.classList.add(chosen === correct ? 'correct' : 'wrong');
+      if (chosen !== correct) {
+        group[correct].classList.add('correct');
+      }
+      $(`ans-${idx}`).classList.add('show');
     });
-    $('revealAll').textContent = '✓ All Revealed';
-    $('revealAll').disabled = true;
-  };
-
-  // Reset reveal button state for fresh quiz
-  $('revealAll').textContent = 'Reveal All';
-  $('revealAll').disabled = false;
+  });
 }
 
-/* ════════════════════════════════════════════════════════════════
-   3.  TEXT SUMMARIZER
-   Backend: /summarize  →  Keras Dense NN + NLTK
-════════════════════════════════════════════════════════════════ */
-const summTextEl = $('summText');
-const charCountEl = $('charCount');
+$('btnQuiz').addEventListener('click', async () => {
+  const topic      = $('quizTopic').value.trim();
+  const difficulty = getQuizDifficulty();
+  if (!topic) { showToast('Please enter a topic.', 'err'); return; }
 
-summTextEl.addEventListener('input', () => {
-  const n = summTextEl.value.length;
-  charCountEl.textContent = `${n.toLocaleString()} character${n !== 1 ? 's' : ''}`;
+  showLoader('Generating quiz questions…');
+  try {
+    const d = await postJSON('/generate_quiz', { topic, difficulty });
+
+    $('quizSbjTitle').textContent = `Quiz — ${d.subject}`;
+    renderQuiz(d.questions);
+    $('quizMNote').textContent = `Model: ${d.model_used}`;
+    $('quizOutput').style.display = 'block';
+
+    if (d.chart_b64) {
+      $('qChart').src = `data:image/png;base64,${d.chart_b64}`;
+      $('qChartWrap').style.display = 'block';
+    }
+    showToast('Quiz ready!', 'ok');
+  } catch (e) {
+    showToast(e.message, 'err');
+  } finally {
+    hideLoader();
+  }
+});
+
+$('revealAll').addEventListener('click', () => {
+  document.querySelectorAll('.ans-reveal').forEach(el => el.classList.add('show'));
+  document.querySelectorAll('.opt').forEach(opt => {
+    opt.style.pointerEvents = 'none';
+    if (parseInt(opt.dataset.opt) === parseInt(opt.dataset.correct)) {
+      opt.classList.add('correct');
+    }
+  });
+});
+
+// ── Text Summarizer ──────────────────────────────────────────────
+
+$('summText').addEventListener('input', function () {
+  $('charCount').textContent = `${this.value.length} characters`;
 });
 
 $('btnSumm').addEventListener('click', async () => {
-  const text = summTextEl.value.trim();
-  if (text.length < 50) { toast('Please paste at least 50 characters of text.', 'err'); return; }
+  const text = $('summText').value.trim();
+  if (text.length < 50) { showToast('Please enter at least 50 characters.', 'err'); return; }
 
-  const data = await api(
-    '/summarize',
-    { text },
-    'Scoring sentences with Keras Dense NN…'
-  );
-  if (!data) return;
+  showLoader('Summarising with Keras NN…');
+  try {
+    const d = await postJSON('/summarize', { text });
 
-  // Summary paragraph
-  $('summResult').textContent = data.summary;
+    $('summResult').textContent = d.summary;
 
-  // Keyword chips (NLTK)
-  $('kwResult').innerHTML = data.keywords
-    .map(kw => `<span class="kw">${esc(kw)}</span>`)
-    .join('');
+    const kwEl = $('kwResult');
+    kwEl.innerHTML = d.keywords.map(k => `<span class="kw">${k}</span>`).join('');
 
-  // Bullet points
-  $('bpResult').innerHTML = data.bullet_points
-    .map(bp => `<li>${esc(bp)}</li>`)
-    .join('');
+    const bpEl = $('bpResult');
+    bpEl.innerHTML = d.bullet_points.map(b => `<li>${b}</li>`).join('');
 
-  $('summMNote').textContent = `🧠 Model: ${data.model_used}`;
-  $('summOutput').style.display = 'block';
-  $('summOutput').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  toast('📝 Summary complete!', 'ok');
+    $('summMNote').textContent = `Model: ${d.model_used}`;
+    $('summOutput').style.display = 'block';
+    showToast('Summary ready!', 'ok');
+  } catch (e) {
+    showToast(e.message, 'err');
+  } finally {
+    hideLoader();
+  }
 });
 
-/* ════════════════════════════════════════════════════════════════
-   4.  STUDY TIPS
-   Backend: /study_tips  →  NLTK keyword extraction
-════════════════════════════════════════════════════════════════ */
+// ── Study Tips ───────────────────────────────────────────────────
+
 $('btnTips').addEventListener('click', async () => {
   const subject = $('tipsSubject').value.trim();
   const text    = $('tipsText').value.trim();
+  if (!subject && !text) { showToast('Please enter a subject or some text.', 'err'); return; }
 
-  if (!subject && !text) { toast('Enter a subject or paste some text.', 'err'); return; }
+  showLoader('Extracting tips with NLTK…');
+  try {
+    const d = await postJSON('/study_tips', { subject, text });
 
-  const data = await api(
-    '/study_tips',
-    { subject, text },
-    'Extracting keywords with NLTK…'
-  );
-  if (!data) return;
+    const kwEl = $('tipsKw');
+    kwEl.innerHTML = (d.keywords || []).map(k => `<span class="kw">${k}</span>`).join('');
 
-  // Keyword chips
-  $('tipsKw').innerHTML = data.keywords.length
-    ? data.keywords.map(kw => `<span class="kw">${esc(kw)}</span>`).join('')
-    : `<span class="kw">${esc(data.subject)}</span>`;
+    const listEl = $('tipsList');
+    listEl.innerHTML = (d.tips || []).map(t => `<li>${t}</li>`).join('');
 
-  // Numbered tips list
-  $('tipsList').innerHTML = data.tips
-    .map(tip => `<li>${esc(tip)}</li>`)
-    .join('');
-
-  $('tipsOutput').style.display = 'block';
-  $('tipsOutput').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  toast(`💡 ${data.tips.length} tips for ${data.subject}!`, 'ok');
+    $('tipsOutput').style.display = 'block';
+    showToast('Tips generated!', 'ok');
+  } catch (e) {
+    showToast(e.message, 'err');
+  } finally {
+    hideLoader();
+  }
 });
 
-/* ════════════════════════════════════════════════════════════════
-   5.  MOTIVATIONAL FEEDBACK
-   Backend: /feedback  →  Keras Embedding + Dense NN
-════════════════════════════════════════════════════════════════ */
-const scoreRange = $('fbScore');
-const scoreLbl   = $('scoreLbl');
-scoreRange.addEventListener('input', () => {
-  scoreLbl.textContent = `${scoreRange.value}%`;
-});
+// ── Feedback ─────────────────────────────────────────────────────
 
-// Colour the score ring based on category
-const RING_COLORS = {
-  excellent: '#22C55E',
-  good:      '#3B82F6',
-  average:   '#E8A23A',
-  needs_work:'#F87171',
-};
+$('fbScore').addEventListener('input', function () {
+  $('scoreLbl').textContent = `${this.value}%`;
+});
 
 $('btnFb').addEventListener('click', async () => {
-  const name    = $('fbName').value.trim()    || 'Student';
-  const subject = $('fbSubject').value.trim() || 'General';
-  const score   = parseInt(scoreRange.value);
+  const student_name = $('fbName').value.trim() || 'Student';
+  const subject      = $('fbSubject').value.trim() || 'General';
+  const quiz_score   = parseInt($('fbScore').value);
 
-  const data = await api(
-    '/feedback',
-    { student_name: name, subject, quiz_score: score },
-    'Classifying score with Keras Embedding NN…'
-  );
-  if (!data) return;
-
-  // Update score ring
-  const ringColor = RING_COLORS[data.category] || '#E8A23A';
-  const ring = $('scoreRing');
-  ring.style.borderColor = ringColor;
-  ring.style.boxShadow   = `0 0 20px ${ringColor}55`;
-  $('scoreNum').textContent  = data.score;
-  $('scoreNum').style.color  = ringColor;
-
-  $('fbMsg').textContent      = data.message;
-  $('fbNext').innerHTML       = `<strong>Next Step →</strong> ${esc(data.next_step)}`;
-  $('fbMNote').textContent    = `💬 Model: ${data.model_used}`;
-
-  $('fbOutput').style.display = 'block';
-  $('fbOutput').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  toast('🌟 Feedback generated!', 'ok');
-});
-
-/* ════════════════════════════════════════════════════════════════
-   6.  RESOURCE SUGGESTIONS
-   Backend: /resources  →  TF-IDF + K-means clustering
-════════════════════════════════════════════════════════════════ */
-$('btnRes').addEventListener('click', async () => {
-  const subject = $('resSubject').value.trim();
-  if (!subject) { toast('Please enter a subject.', 'err'); return; }
-
-  const data = await api(
-    '/resources',
-    { subject },
-    'Clustering topic with K-means…'
-  );
-  if (!data) return;
-
-  $('resSbjTitle').textContent = `${data.subject} Resources`;
-  $('resMNote').textContent    = `🔍 ${data.model_used}  ·  Cluster: ${data.cluster_label ?? 'N/A'}`;
-
-  $('resGrid').innerHTML = data.resources.map(r => `
-    <a class="res-card" href="${esc(r.url)}" target="_blank" rel="noopener">
-      <div class="res-type">${esc(r.type)}</div>
-      <div class="res-title">${esc(r.title)}</div>
-      <div class="res-desc">${esc(r.desc)}</div>
-    </a>`).join('');
-
-  $('resOutput').style.display = 'block';
-  $('resOutput').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  toast(`🔗 ${data.resources.length} resources for ${data.subject}!`, 'ok');
-});
-
-/* ── EDA Chart (Dataset distribution pie chart) ────────────────── */
-$('btnEda').addEventListener('click', async () => {
-  loader('Generating Matplotlib EDA chart…');
+  showLoader('Generating personalised feedback…');
   try {
-    const r = await fetch('/chart/distribution');
-    const d = await r.json();
+    const d = await postJSON('/feedback', { student_name, subject, quiz_score });
+
+    $('scoreNum').textContent = d.score;
+    $('scoreRing').style.borderColor =
+      d.score >= 75 ? 'var(--green)' : d.score >= 50 ? 'var(--gold)' : 'var(--red)';
+    $('fbMsg').textContent  = d.message;
+    $('fbNext').textContent = d.next_step;
+    $('fbMNote').textContent = `Model: ${d.model_used}`;
+    $('fbOutput').style.display = 'block';
+    showToast('Feedback ready!', 'ok');
+  } catch (e) {
+    showToast(e.message, 'err');
+  } finally {
+    hideLoader();
+  }
+});
+
+// ── Resources ────────────────────────────────────────────────────
+
+$('btnEda').addEventListener('click', async () => {
+  showLoader('Loading Matplotlib chart…');
+  try {
+    const res  = await fetch('/chart/distribution');
+    const text = await res.text();
+    if (!text || text.trim() === '') throw new Error('Empty response');
+    const d = JSON.parse(text);
     if (d.chart_b64) {
-      const img = $('edaImg');
-      img.src   = `data:image/png;base64,${d.chart_b64}`;
-      img.style.display = 'block';
-      $('btnEda').textContent = '✓ Chart Loaded';
-      $('btnEda').disabled    = true;
-      toast('📊 EDA chart loaded!', 'ok');
+      $('edaImg').src = `data:image/png;base64,${d.chart_b64}`;
+      $('edaImg').style.display = 'block';
     }
   } catch (e) {
-    toast('Failed to load chart.', 'err');
+    showToast(e.message, 'err');
+  } finally {
+    hideLoader();
+  }
+});
+
+$('btnRes').addEventListener('click', async () => {
+  const subject = $('resSubject').value.trim();
+  if (!subject) { showToast('Please enter a subject.', 'err'); return; }
+
+  showLoader('Clustering resources with K-means…');
+  try {
+    const d = await postJSON('/resources', { subject });
+
+    $('resSbjTitle').textContent = `Resources — ${d.subject}`;
+    $('resMNote').textContent    = `Cluster: ${d.cluster_label} · Model: ${d.model_used}`;
+
+    const grid = $('resGrid');
+    grid.innerHTML = (d.resources || []).map(r => `
+      <a class="res-card" href="${r.url || '#'}" target="_blank" rel="noopener">
+        <div class="res-type">${r.type || 'Resource'}</div>
+        <div class="res-title">${r.title}</div>
+        <div class="res-desc">${r.description || ''}</div>
+      </a>`).join('');
+
+    $('resOutput').style.display = 'block';
+    showToast('Resources found!', 'ok');
+  } catch (e) {
+    showToast(e.message, 'err');
   } finally {
     hideLoader();
   }
