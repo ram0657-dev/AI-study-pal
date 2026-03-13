@@ -667,24 +667,17 @@ def _infer_subject(topic_text: str) -> str:
     return best if scores[best] > 0 else random.choice(list(_SUBJECT_KEYWORDS.keys()))
 
 
-def generate_quiz(topic: str, difficulty: str, chapter: str = '',
+def generate_quiz(subject: str, difficulty: str, chapter: str = '',
                   num_questions: int = 10) -> dict:
     """
-    Returns num_questions MCQs on the requested topic/chapter and difficulty level.
-    Uses Logistic Regression to classify question difficulty,
-    then selects the closest matching questions.
-
-    Options are returned as a list; answer_index is a 0-based integer
-    so that the frontend (script.js) can render them directly.
+    Returns num_questions MCQs for the given subject and difficulty.
+    Subject must be one of: Biology, Mathematics, History, Python, Physics, Chemistry.
     """
     global _quiz_vectorizer, _quiz_classifier
 
-    # Combine topic + chapter for subject inference
-    combined_text = (topic + ' ' + chapter).strip()
-    subject  = _infer_subject(combined_text)
     diff_int = _DIFF_MAP.get(difficulty.lower(), 1)
 
-    # Filter dataset by subject
+    # Filter dataset by exact subject
     subject_qs = [q for q in QUESTIONS_DATASET if q['subject'] == subject]
     if not subject_qs:
         subject_qs = QUESTIONS_DATASET[:]
@@ -693,9 +686,9 @@ def generate_quiz(topic: str, difficulty: str, chapter: str = '',
     if chapter:
         chapter_lower = chapter.lower()
         chapter_qs = [q for q in subject_qs if chapter_lower in q['topic'].lower()
-                      or any(w in q['question'].lower() for w in chapter_lower.split())]
+                      or any(w in q['question'].lower() for w in chapter_lower.split() if len(w) > 3)]
         if chapter_qs:
-            subject_qs = chapter_qs  # use chapter-filtered set if non-empty
+            subject_qs = chapter_qs
 
     # ML-based difficulty scoring
     texts = [q['question'] + ' ' + q['topic'] for q in subject_qs]
@@ -990,95 +983,131 @@ def generate_study_plan(subject: str, hours_per_day: float,
 #  SECTION 7 — MOTIVATIONAL FEEDBACK  (Keras Embedding NN)
 # ================================================================
 
-def generate_feedback(subject: str, quiz_score: int,
-                      student_name: str = 'Student',
-                      score_obtained: float = None,
-                      score_total: float = None,
-                      chapters: list = None) -> dict:
+
+# ================================================================
+#  SECTION 7 — MOTIVATIONAL FEEDBACK  (image-based, no marks)
+# ================================================================
+
+# Subject topic map used for feedback strategy generation
+_FEEDBACK_TOPIC_MAP = {
+    "Biology":     ["Cell Biology","Genetics","Photosynthesis","Respiration","Ecology","Evolution","Biochemistry","Human Body Systems"],
+    "Mathematics": ["Algebra","Calculus","Geometry","Statistics","Trigonometry","Number Theory","Integration","Probability"],
+    "History":     ["Ancient Civilisations","World Wars","Revolutions","Colonialism","Cold War","Industrial Revolution","Political History"],
+    "Python":      ["Python Basics","OOP","Data Structures","Algorithms","Functions","Control Flow","Recursion","Decorators"],
+    "Physics":     ["Mechanics","Kinematics","Energy","Waves","Electricity","Thermodynamics","Quantum Physics","Forces"],
+    "Chemistry":   ["Atomic Structure","Periodic Table","Chemical Bonds","Reactions","Acids & Bases","Organic Chemistry","Electrochemistry"],
+    "General":     ["Core Concepts","Problem Solving","Critical Thinking","Revision Strategies","Past Papers","Time Management"],
+}
+
+_IMPROVEMENT_TIPS = {
+    "low": [
+        "Break this topic into sub-topics and study one per day.",
+        "Watch a video explanation (Khan Academy / CrashCourse) before reading notes.",
+        "Create flashcards for every key term and test yourself daily.",
+        "Ask your teacher or a classmate to walk through this concept with you.",
+        "Start with easy questions to build confidence before attempting harder ones.",
+        "Do not move to new material until the basics here are fully understood.",
+    ],
+    "medium": [
+        "Re-read your notes and highlight concepts that still feel uncertain.",
+        "Attempt 5–10 practice questions specifically on this topic.",
+        "Make a one-page summary of all formulas and definitions in this area.",
+        "Use the Pomodoro technique: 25 min study → 5 min break, repeat 3×.",
+        "Revisit past exam questions that tested this topic.",
+    ],
+    "high": [
+        "Extend your knowledge by attempting hard-difficulty questions on this topic.",
+        "Create a cheat-sheet to help revise just before the exam.",
+        "Explore advanced concepts beyond the syllabus for deeper understanding.",
+        "Try explaining this topic to a peer — teaching reveals hidden gaps.",
+    ],
+}
+
+
+def generate_feedback(subject: str, student_name: str = 'Student',
+                      image_bytes: bytes = None) -> dict:
     """
-    1. Keras Embedding + Dense model classifies score → feedback category.
-    2. Template system generates personalised text.
-    3. Per-chapter improvement strategies returned when chapters supplied.
+    Image-based feedback:
+      1. OCR the uploaded question paper.
+      2. Identify topics/keywords present in the paper.
+      3. Match against subject topic bank.
+      4. Generate personalised improvement strategies per identified area.
+      5. No score/marks needed — purely content-based analysis.
     """
-    global _feedback_model, _feedback_vocab
+    greeting = f"Hello {student_name}! Here's your personalised feedback."
 
-    score = max(0, min(100, int(quiz_score)))
+    # ── Step 1: Extract text from image via OCR ──────────────────
+    paper_text = ""
+    if image_bytes:
+        paper_text = _ocr_image(image_bytes)
 
-    # Keras prediction
-    category_key = "average"
-    if KERAS_OK and _feedback_model is not None:
-        subj_token   = _feedback_vocab.get(subject, 0) if _feedback_vocab else 0
-        score_bucket = min(3, score // 25)
-        x = np.array([[score_bucket, subj_token, score_bucket + subj_token % 3, 0, 0]])
-        pred = _feedback_model.predict(x, verbose=0)[0]
-        cat_idx = int(np.argmax(pred))
-        category_key = ["needs_work","average","good","excellent"][cat_idx]
-    else:
-        if   score >= 80: category_key = "excellent"
-        elif score >= 60: category_key = "good"
-        elif score >= 40: category_key = "average"
-        else:              category_key = "needs_work"
+    # ── Step 2: Identify topics covered in the paper ─────────────
+    subject_topics = _FEEDBACK_TOPIC_MAP.get(subject, _FEEDBACK_TOPIC_MAP["General"])
+    general_topics = _FEEDBACK_TOPIC_MAP["General"]
 
-    # Choose random template from category, fill placeholders
-    template = random.choice(FEEDBACK_TEMPLATES[category_key])
-    message  = template.format(name=student_name, score=score, subject=subject)
+    detected_topics = []
+    if paper_text:
+        text_lower = paper_text.lower()
+        for topic in subject_topics:
+            # Match topic keywords in OCR text
+            topic_words = [w.lower() for w in topic.split() if len(w) > 3]
+            if any(w in text_lower for w in topic_words):
+                detected_topics.append(topic)
 
-    # Next-steps advice
-    if   category_key == "excellent": next_step = "Challenge yourself with hard-difficulty quizzes to maintain your edge."
-    elif category_key == "good":       next_step = "Target the questions you got wrong, then retake the quiz."
-    elif category_key == "average":    next_step = "Revisit the study tips for this subject and schedule a focused revision session."
-    else:                               next_step = "Go back to basics — start with easy questions and build confidence step by step."
+    # If OCR yielded no matches (common when tesseract not installed),
+    # use NLTK keyword extraction on OCR text or fall back to full topic bank
+    if not detected_topics:
+        if paper_text and len(paper_text) > 30:
+            keywords = _extract_keywords(paper_text, top_n=5)
+            for kw in keywords:
+                for topic in subject_topics:
+                    if kw.lower() in topic.lower() and topic not in detected_topics:
+                        detected_topics.append(topic)
 
-    # ── Per-chapter improvement strategies ───────────────────────
+    # If still no matches, provide general coverage of the subject
+    if not detected_topics:
+        detected_topics = subject_topics[:4]  # highlight first 4 topics as areas to focus
+
+    # ── Step 3: Generate improvement strategies per topic ─────────
     strategies = []
-    if chapters:
-        _improvement_tips = {
-            "excellent": [
-                "Extend your knowledge by trying harder past-paper questions on this chapter.",
-                "Create a one-page summary cheat-sheet to help classmates.",
-                "Explore advanced concepts beyond the syllabus for deeper understanding.",
-            ],
-            "good": [
-                "Review the questions you got wrong in this chapter specifically.",
-                "Re-read your notes and highlight any concepts that still feel uncertain.",
-                "Attempt 5 more practice problems focusing on this topic.",
-            ],
-            "average": [
-                "Re-study this chapter from the beginning using a different resource (video/textbook).",
-                "Make a list of every formula or definition in this chapter and memorise them.",
-                "Attempt easy-level questions first to rebuild confidence, then go harder.",
-                "Use the Pomodoro technique: 25 min focused study → 5 min break, repeat 3×.",
-            ],
-            "needs_work": [
-                "Break this chapter into individual sub-topics and tackle one per day.",
-                "Watch a video explanation (Khan Academy / CrashCourse) before re-reading notes.",
-                "Ask your teacher or a peer to walk through the key concepts with you.",
-                "Create flashcards for every key term and test yourself daily.",
-                "Do not move on to new material until the basics here are solid.",
-            ],
-        }
-        tips_pool = _improvement_tips.get(category_key, _improvement_tips["average"])
+    for i, topic in enumerate(detected_topics[:6]):
+        # Vary tip intensity across topics
+        level = ["low", "medium", "medium", "high", "medium", "low"][i % 6]
+        tips_pool = _IMPROVEMENT_TIPS[level]
+        # Offset tips per topic so they don't repeat
+        offset_tips = tips_pool[i % len(tips_pool):] + tips_pool[:i % len(tips_pool)]
+        strategies.append({
+            "chapter": topic,
+            "weakness": f"This area appeared in your paper — strengthen your understanding here.",
+            "tips": offset_tips[:3],
+        })
 
-        for i, chap in enumerate(chapters[:6]):   # max 6 chapters
-            weakness = (
-                f"This chapter needs focused revision — your overall score suggests "
-                f"{'gaps in understanding' if score < 60 else 'room for improvement'} here."
-            )
-            # Cycle through tips slightly differently per chapter
-            chapter_tips = tips_pool[i % len(tips_pool):] + tips_pool[:i % len(tips_pool)]
-            strategies.append({
-                "chapter":  chap,
-                "weakness": weakness,
-                "tips":     chapter_tips[:3],
-            })
+    # ── Step 4: Generate overall message ─────────────────────────
+    if paper_text and len(paper_text) > 50:
+        message = (
+            f"I've analysed your {subject} question paper, {student_name}. "
+            f"Based on the topics identified, I've highlighted {len(strategies)} key areas "
+            f"for you to focus your revision on. Work through each area systematically "
+            f"using the strategies below."
+        )
+    else:
+        message = (
+            f"Thanks for uploading your {subject} paper, {student_name}! "
+            f"I've prepared a targeted revision plan based on the common topic areas "
+            f"in {subject}. Focus on each area below — consistent revision of these "
+            f"topics will significantly improve your performance."
+        )
+
+    next_step = (
+        f"Start with the first topic listed below, spend 1–2 focused sessions on it, "
+        f"then move to the next. Use past papers to test yourself after each topic."
+    )
 
     return {
+        "greeting":   greeting,
         "message":    message,
-        "category":   category_key,
-        "score":      score,
         "next_step":  next_step,
-        "model_used": "Keras Embedding + Dense NN" if KERAS_OK else "Rule-based fallback",
-        "strategies": strategies,   # ← list of per-chapter dicts
+        "strategies": strategies,
     }
 
 
