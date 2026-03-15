@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AI Study Pal</title>
+  <title>AI Study Pal — Capstone Project</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -22,34 +22,40 @@
     </div>
     <div>
       <div class="brand-name">AI Study Pal</div>
-      <div class="brand-tag">Your Smart Learning Companion</div>
+      <div class="brand-tag">LaunchED Capstone · 2026</div>
     </div>
   </div>
 
   <div class="nav-section-lbl">Features</div>
   <nav class="nav">
     <button class="nav-btn active" data-page="planner">
-      <span class="ni">📅</span><span class="nt">Study Planner</span>
+      <span class="ni">📅</span><span class="nt">Study Planner</span><span class="nc">Pandas</span>
     </button>
     <button class="nav-btn" data-page="quiz">
-      <span class="ni">❓</span><span class="nt">Quiz Generator</span>
+      <span class="ni">❓</span><span class="nt">Quiz Generator</span><span class="nc">LR</span>
     </button>
     <button class="nav-btn" data-page="summarizer">
-      <span class="ni">📝</span><span class="nt">Summarizer</span>
+      <span class="ni">📝</span><span class="nt">Summarizer</span><span class="nc">Keras</span>
     </button>
     <button class="nav-btn" data-page="tips">
-      <span class="ni">💡</span><span class="nt">Study Tips</span>
+      <span class="ni">💡</span><span class="nt">Study Tips</span><span class="nc">NLTK</span>
     </button>
     <button class="nav-btn" data-page="feedback">
-      <span class="ni">🌟</span><span class="nt">Feedback</span>
+      <span class="ni">🌟</span><span class="nt">Feedback</span><span class="nc">DL</span>
     </button>
     <button class="nav-btn" data-page="resources">
-      <span class="ni">🔗</span><span class="nt">Resources</span>
+      <span class="ni">🔗</span><span class="nt">Resources</span><span class="nc">K-means</span>
     </button>
   </nav>
 
+  <div class="nav-section-lbl" style="margin-top:auto;padding-top:24px">Tech Stack</div>
+  <div class="tech-pills">
+    <span>Python</span><span>Flask</span><span>Pandas</span>
+    <span>scikit-learn</span><span>Keras</span><span>NLTK</span><span>Matplotlib</span>
+  </div>
+
   <div class="sb-status">
-    <span class="dot-green"></span>All Systems Online
+    <span class="dot-green"></span>Models Online
   </div>
 </aside>
 
@@ -63,21 +69,17 @@
     <div class="phdr">
       <div>
         <h1>Study <em>Planner</em></h1>
-        <p>AI-powered personalised schedule with chapter breakdown and CSV export</p>
+        <p>Pandas date-range scheduler · Rule-based AI · CSV export</p>
       </div>
+      <div class="mbadge">📊 Pandas + Logistic Regression</div>
     </div>
+
     <div class="tcols">
       <div class="card">
         <h2 class="ct">Your Details</h2>
         <div class="fld">
           <label>Subject / Course</label>
           <input type="text" id="planSubject" placeholder="e.g. Biology, Mathematics, Python…"/>
-        </div>
-        <div class="fld">
-          <label>Chapters &amp; Topics <span class="lbl-hint">(one per line)</span></label>
-          <textarea id="planChapters" rows="5"
-            placeholder="Chapter 1: Cell Structure&#10;Chapter 2: Photosynthesis&#10;Chapter 3: Genetics&#10;Chapter 4: Ecosystems"></textarea>
-          <div class="field-hint">Each line = one chapter. Time is allocated per chapter automatically.</div>
         </div>
         <div class="fld">
           <label>Daily study hours &mdash; <span id="hoursLbl" class="gold">3 hrs</span></label>
@@ -89,10 +91,11 @@
         </div>
         <button class="btn gold-btn" id="btnPlan">Generate Study Plan &rarr;</button>
         <div class="chart-frame" id="planChartWrap" style="display:none">
-          <div class="chart-lbl">📈 Weekly Study Hours</div>
+          <div class="chart-lbl">📈 Weekly Hours — Matplotlib Chart</div>
           <img id="planChart" class="cimg" alt="Weekly hours chart"/>
         </div>
       </div>
+
       <div class="card out-card" id="planOutput" style="display:none">
         <div class="out-hdr">
           <h2 class="ct">Your Schedule</h2>
@@ -108,58 +111,18 @@
     <div class="phdr">
       <div>
         <h1>Quiz <em>Generator</em></h1>
-        <p>Choose your subject and get an AI-generated timed quiz</p>
+        <p>TF-IDF vectorisation · Logistic Regression difficulty classifier · 5 MCQs</p>
       </div>
+      <div class="mbadge">🤖 TF-IDF + Logistic Regression</div>
     </div>
+
     <div class="tcols">
       <div class="card">
         <h2 class="ct">Quiz Settings</h2>
-
-        <!-- ✅ Subject grid (replaces free-text topic) -->
         <div class="fld">
-          <label>Select Subject</label>
-          <div class="subject-grid" id="quizSubjectGrid">
-            <button class="subj-btn" data-val="Biology">🧬 Biology</button>
-            <button class="subj-btn" data-val="Mathematics">📐 Mathematics</button>
-            <button class="subj-btn" data-val="History">🏛️ History</button>
-            <button class="subj-btn" data-val="Python">💻 Python</button>
-            <button class="subj-btn" data-val="Physics">⚛️ Physics</button>
-            <button class="subj-btn" data-val="Chemistry">🧪 Chemistry</button>
-          </div>
-          <div class="field-hint err-hint" id="subjHint" style="display:none">⚠ Please select a subject above.</div>
+          <label>Topic</label>
+          <input type="text" id="quizTopic" placeholder="e.g. Photosynthesis, Newton's Laws, Python OOP…"/>
         </div>
-
-        <!-- Chapter optional -->
-        <div class="fld">
-          <label>Chapter / Topic <span class="lbl-hint">(optional)</span></label>
-          <input type="text" id="quizChapter"
-            placeholder="e.g. Cell Division, Newton's Laws…"/>
-          <div class="field-hint">Questions will be focused on this chapter if provided.</div>
-        </div>
-
-        <!-- Number of questions -->
-        <div class="fld">
-          <label>Number of Questions</label>
-          <div class="pills" id="quizNumQ">
-            <button class="pl" data-val="5">5</button>
-            <button class="pl active" data-val="10">10</button>
-            <button class="pl" data-val="15">15</button>
-            <button class="pl" data-val="20">20</button>
-          </div>
-        </div>
-
-        <!-- Timer -->
-        <div class="fld">
-          <label>Timer per Question</label>
-          <div class="pills" id="quizTimer">
-            <button class="pl active" data-val="0">No Timer</button>
-            <button class="pl" data-val="30">30 sec</button>
-            <button class="pl" data-val="60">60 sec</button>
-            <button class="pl" data-val="90">90 sec</button>
-          </div>
-        </div>
-
-        <!-- Difficulty -->
         <div class="fld">
           <label>Difficulty</label>
           <div class="pills" id="quizDiff">
@@ -168,11 +131,9 @@
             <button class="pl" data-val="hard">🔴 Hard</button>
           </div>
         </div>
-
         <button class="btn gold-btn" id="btnQuiz">Generate Quiz &rarr;</button>
-
         <div class="chart-frame" id="qChartWrap" style="display:none">
-          <div class="chart-lbl">📊 Difficulty Distribution</div>
+          <div class="chart-lbl">📊 Difficulty Distribution — Matplotlib</div>
           <img id="qChart" class="cimg" alt="Difficulty chart"/>
         </div>
       </div>
@@ -180,24 +141,10 @@
       <div class="card out-card" id="quizOutput" style="display:none">
         <div class="out-hdr">
           <h2 class="ct" id="quizSbjTitle">Quiz</h2>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <div id="quizTimerDisplay" style="display:none">
-              <div class="timer-ring" id="timerRingEl">
-                <svg viewBox="0 0 44 44">
-                  <circle cx="22" cy="22" r="18" fill="none" stroke="var(--bg3)" stroke-width="3"/>
-                  <circle cx="22" cy="22" r="18" fill="none" stroke="var(--gold)"
-                    stroke-width="3" stroke-linecap="round"
-                    stroke-dasharray="113" stroke-dashoffset="0"
-                    id="timerCircle" transform="rotate(-90 22 22)"/>
-                </svg>
-                <span id="timerCount">30</span>
-              </div>
-            </div>
-            <div id="quizProgress" class="quiz-progress"></div>
-            <button class="btn sm-btn outline-btn" id="revealAll">Reveal All</button>
-          </div>
+          <button class="btn sm-btn outline-btn" id="revealAll">Reveal All</button>
         </div>
         <div id="quizResult"></div>
+        <p class="mnote" id="quizMNote"></p>
       </div>
     </div>
   </section>
@@ -207,73 +154,37 @@
     <div class="phdr">
       <div>
         <h1>Text <em>Summarizer</em></h1>
-        <p>Paste text or upload a photo of your notes for an instant summary</p>
+        <p>Keras Dense NN sentence scorer · NLTK keyword extractor</p>
       </div>
-    </div>
-
-    <div class="input-tabs">
-      <button class="itab active" data-tab="text">✏️ Paste Text</button>
-      <button class="itab" data-tab="image">📷 Upload / Camera</button>
+      <div class="mbadge">🧠 Keras Dense NN + NLTK</div>
     </div>
 
     <div class="ocols">
-      <div class="card" id="panelText">
+      <div class="card">
         <h2 class="ct">Your Notes / Text</h2>
         <div class="fld">
-          <label>Paste text <span class="lbl-hint">(min 50 characters)</span></label>
-          <textarea id="summText" rows="10"
-            placeholder="Paste your lecture notes, textbook excerpt, or any study material…"></textarea>
+          <label>Paste text (min 50 characters)</label>
+          <textarea id="summText" rows="10" placeholder="Paste your lecture notes, textbook excerpt, or any study material…"></textarea>
           <div class="ccount" id="charCount">0 characters</div>
         </div>
         <button class="btn gold-btn" id="btnSumm">Summarize &rarr;</button>
       </div>
 
-      <div class="card" id="panelImage" style="display:none">
-        <h2 class="ct">Upload Notes Photo</h2>
-        <div class="camera-zone" id="summCameraZone">
-          <div class="camera-placeholder" id="summCameraPlaceholder">
-            <div class="cam-icon">📷</div>
-            <p>Drag &amp; drop a photo of your notes<br/>or click to browse / use camera</p>
-            <div style="display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap">
-              <button class="btn outline-btn" id="summBtnBrowse">📁 Browse File</button>
-              <button class="btn outline-btn" id="summBtnCamera">📷 Use Camera</button>
-            </div>
-          </div>
-          <img id="summNotePreview" class="note-preview" style="display:none" alt="Notes"/>
-          <div id="summCaptureControls" style="display:none;text-align:center;margin-top:12px">
-            <video id="summCameraFeed" autoplay playsinline style="width:100%;border-radius:var(--r);max-height:300px"></video>
-            <div style="display:flex;gap:10px;justify-content:center;margin-top:10px">
-              <button class="btn gold-btn" id="summBtnSnap" style="width:auto">📸 Capture</button>
-              <button class="btn outline-btn" id="summBtnCancelCam">Cancel</button>
-            </div>
-          </div>
-        </div>
-        <input type="file" id="summFileInput" accept="image/*" style="display:none"/>
-        <canvas id="summSnapCanvas" style="display:none"></canvas>
-        <div id="summImageActions" style="display:none;margin-top:10px;align-items:center;gap:10px">
-          <button class="btn outline-btn sm-btn" id="summBtnClearImage">✕ Clear</button>
-          <span class="field-hint" id="summImageName"></span>
-        </div>
-        <button class="btn gold-btn" id="btnSummImage" style="margin-top:14px">
-          🔍 Analyse &amp; Summarize &rarr;
-        </button>
-      </div>
-
       <div class="card out-card" id="summOutput" style="display:none">
         <h2 class="ct">Results</h2>
-        <div id="summSourceBadge" class="source-badge" style="margin-bottom:12px"></div>
         <div class="sblock">
-          <div class="slbl">📋 Summary</div>
+          <div class="slbl">📋 Summary (Keras NN)</div>
           <p id="summResult" class="stext"></p>
         </div>
         <div class="sblock">
-          <div class="slbl">🔑 Keywords</div>
+          <div class="slbl">🔑 Keywords (NLTK)</div>
           <div id="kwResult" class="kw-chips"></div>
         </div>
         <div class="sblock">
-          <div class="slbl">• Key Points</div>
+          <div class="slbl">• Bullet Points</div>
           <ul id="bpResult" class="bp-list"></ul>
         </div>
+        <p class="mnote" id="summMNote"></p>
       </div>
     </div>
   </section>
@@ -283,9 +194,11 @@
     <div class="phdr">
       <div>
         <h1>Study <em>Tips</em></h1>
-        <p>Personalised study strategies based on your subject and needs</p>
+        <p>NLTK tokenisation &amp; stop-word removal · keyword-to-tip mapping</p>
       </div>
+      <div class="mbadge">📖 NLTK Keyword Extraction</div>
     </div>
+
     <div class="tcols">
       <div class="card">
         <h2 class="ct">Your Subject</h2>
@@ -294,11 +207,12 @@
           <input type="text" id="tipsSubject" placeholder="e.g. Biology, Chemistry, History…"/>
         </div>
         <div class="fld">
-          <label>What do you find difficult? <span class="lbl-hint">(optional)</span></label>
-          <textarea id="tipsText" rows="4" placeholder="Describe topics or concepts you struggle with…"></textarea>
+          <label>Optional context (paste a paragraph)</label>
+          <textarea id="tipsText" rows="4" placeholder="Describe what you find difficult…"></textarea>
         </div>
         <button class="btn gold-btn" id="btnTips">Get Study Tips &rarr;</button>
       </div>
+
       <div class="card out-card" id="tipsOutput" style="display:none">
         <h2 class="ct">Personalised Tips</h2>
         <div id="tipsKw" class="kw-chips" style="margin-bottom:14px"></div>
@@ -311,73 +225,42 @@
   <section class="page" id="page-feedback">
     <div class="phdr">
       <div>
-        <h1>Performance <em>Feedback</em></h1>
-        <p>Upload your attempted question paper — AI analyses it and suggests what to focus on</p>
+        <h1>Motivational <em>Feedback</em></h1>
+        <p>Keras Embedding + Dense NN classifies score bucket → personalised encouragement</p>
       </div>
+      <div class="mbadge">💬 Keras Embedding NN</div>
     </div>
+
     <div class="tcols">
       <div class="card">
         <h2 class="ct">Your Details</h2>
-
         <div class="fld">
           <label>Your Name</label>
           <input type="text" id="fbName" placeholder="Enter your name…"/>
         </div>
-
         <div class="fld">
           <label>Subject</label>
-          <input type="text" id="fbSubject" placeholder="e.g. Biology, Physics, Mathematics…"/>
+          <input type="text" id="fbSubject" placeholder="e.g. Biology, Physics…"/>
         </div>
-
-        <!-- ✅ NEW: Question paper image upload -->
         <div class="fld">
-          <label>Upload Question Paper / Attempted Test</label>
-          <div class="camera-zone" id="fbCameraZone">
-            <div class="camera-placeholder" id="fbCameraPlaceholder">
-              <div class="cam-icon">📄</div>
-              <p>Take a photo or upload your attempted question paper<br/>
-                 <span style="font-size:.75rem;color:var(--t3)">We'll analyse the questions and suggest areas to improve</span>
-              </p>
-              <div style="display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap">
-                <button class="btn outline-btn" id="fbBtnBrowse">📁 Browse File</button>
-                <button class="btn outline-btn" id="fbBtnCamera">📷 Use Camera</button>
-              </div>
-            </div>
-            <img id="fbPaperPreview" class="note-preview" style="display:none" alt="Question paper"/>
-            <div id="fbCaptureControls" style="display:none;text-align:center;margin-top:12px">
-              <video id="fbCameraFeed" autoplay playsinline style="width:100%;border-radius:var(--r);max-height:300px"></video>
-              <div style="display:flex;gap:10px;justify-content:center;margin-top:10px">
-                <button class="btn gold-btn" id="fbBtnSnap" style="width:auto">📸 Capture</button>
-                <button class="btn outline-btn" id="fbBtnCancelCam">Cancel</button>
-              </div>
-            </div>
-          </div>
-          <input type="file" id="fbFileInput" accept="image/*" style="display:none"/>
-          <canvas id="fbSnapCanvas" style="display:none"></canvas>
-          <div id="fbImageActions" style="display:none;margin-top:10px;align-items:center;gap:10px">
-            <button class="btn outline-btn sm-btn" id="fbBtnClearImage">✕ Clear</button>
-            <span class="field-hint" id="fbImageName"></span>
-          </div>
+          <label>Quiz Score &mdash; <span id="scoreLbl" class="gold">50%</span></label>
+          <input type="range" id="fbScore" min="0" max="100" value="50"/>
         </div>
-
-        <button class="btn gold-btn" id="btnFb">Analyse &amp; Get Feedback &rarr;</button>
+        <button class="btn gold-btn" id="btnFb">Get Feedback &rarr;</button>
       </div>
 
       <div class="card out-card" id="fbOutput" style="display:none">
-        <h2 class="ct" id="fbTitle">Your Feedback</h2>
-
-        <div class="fb-greeting" id="fbGreeting"></div>
-        <div class="fb-msg" id="fbMsg"></div>
-
-        <div id="fbStrategiesWrap" style="display:none;margin-top:20px">
-          <div class="slbl" style="margin-bottom:12px">📚 Areas to Focus On</div>
-          <div id="fbStrategies"></div>
+        <h2 class="ct">Your Feedback</h2>
+        <div class="score-ring" id="scoreRing">
+          <div id="scoreNum" class="score-num">50</div>
+          <div class="score-pct">%</div>
         </div>
-
-        <div class="fb-next" id="fbNextWrap" style="display:none;margin-top:16px">
+        <div class="fb-msg" id="fbMsg"></div>
+        <div class="fb-next">
           <strong>Next Step →</strong>
           <span id="fbNext"></span>
         </div>
+        <p class="mnote" id="fbMNote"></p>
       </div>
     </div>
   </section>
@@ -387,16 +270,20 @@
     <div class="phdr">
       <div>
         <h1>Resource <em>Suggestions</em></h1>
-        <p>Curated learning materials matched to your subject</p>
+        <p>TF-IDF vectorisation · K-means topic clustering · curated resource library</p>
       </div>
+      <div class="mbadge">🔍 K-means Clustering</div>
     </div>
+
+    <!-- EDA chart strip -->
     <div class="eda-strip">
       <div class="eda-hdr">
-        <span>📊 Question Distribution by Subject</span>
-        <button class="btn sm-btn outline-btn" id="btnEda">Load Chart</button>
+        <span>📊 Dataset EDA — Question Distribution by Subject</span>
+        <button class="btn sm-btn outline-btn" id="btnEda">Load Chart (Matplotlib)</button>
       </div>
       <img id="edaImg" class="cimg eda-img" alt="Subject distribution chart" style="display:none"/>
     </div>
+
     <div class="tcols" style="margin-top:20px">
       <div class="card">
         <h2 class="ct">Find Resources</h2>
@@ -405,7 +292,9 @@
           <input type="text" id="resSubject" placeholder="e.g. Chemistry, Python, History…"/>
         </div>
         <button class="btn gold-btn" id="btnRes">Find Resources &rarr;</button>
+        <p class="mnote" id="resMNote" style="margin-top:12px"></p>
       </div>
+
       <div class="card out-card" id="resOutput" style="display:none">
         <h2 class="ct" id="resSbjTitle">Resources</h2>
         <div id="resGrid" class="res-grid"></div>
@@ -415,13 +304,17 @@
 
 </main>
 
+<!-- Loading overlay -->
 <div class="overlay" id="overlay">
   <div class="lbox">
     <div class="lring"></div>
     <div class="ltxt" id="ltxt">Processing…</div>
   </div>
 </div>
+
+<!-- Toast -->
 <div class="toast" id="toast"></div>
+
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
